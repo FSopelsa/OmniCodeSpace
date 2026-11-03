@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* Same enamel panel palette as docs/prototypes/shared.css. */
+@theme {
+  --color-panel: #d8dfd7;
+  --color-tile: #c5cfc6;
+  --color-sheet: #f3f5f0;
+  --color-ink: #16231d;
+  --color-ink-2: #4e5e56;
+  --color-rule: #bcc7bd;
+  --color-run: #1f8a55;
+  --color-since: rgb(224 161 0 / 0.2);
+  --font-sans: "Overpass Variable", system-ui, sans-serif;
+  --font-mono: "Overpass Mono", monospace;
+}
+
+body {
+  background: var(--color-sheet);
+  color: var(--color-ink);
+}
+
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}

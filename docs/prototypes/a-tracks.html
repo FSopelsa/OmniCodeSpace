@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prototype A: Tracks</title>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700;800&family=Overpass+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+  main { display: grid; grid-template-columns: 220px 1fr 320px; min-height: 0; }
+  .centre { display: grid; grid-template-rows: 52px 336px 1fr; min-width: 0; }
+  .bar { display: flex; align-items: center; gap: 14px; padding: 0 20px; }
+  .bar h3 { font-size: 20px; }
+  svg.tracks { display: block; width: 100%; height: 336px; background: var(--panel); }
+  .catch { padding: 16px 20px 0; }
+  .catch .line { display: flex; align-items: center; gap: 16px; }
+  .catch .line h2 { white-space: nowrap; }
+  .catch .line button { margin-left: auto; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  td { padding: 7px 10px 7px 0; border-top: 1px solid var(--rule); vertical-align: baseline; }
+  td:first-child { width: 78px; }
+  td .who { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+  td.why { color: var(--ink-2); }
+  td.time { color: var(--ink-2); white-space: nowrap; text-align: right; padding-right: 0; }
+</style>
+</head>
+<body>
+<header>
+  <b>OmniCodeSpace</b><span>Prototype A: one project as a track diagram. Mock data.</span>
+  <button class="push">Start an agent</button>
+</header>
+<main>
+  <nav class="tree">
+    <h2>This PC</h2>
+    <p class="on">shop-api <span class="count">2 agents</span></p>
+    <p>shop-web <span class="count">1 agent</span></p>
+    <p>docs-site <span class="count">none</span></p>
+    <h2>Cloud</h2>
+    <p>shop-api <span class="count">1 agent</span></p>
+    <p>docs-site <span class="count">1 agent</span></p>
+    <h2>Laptop</h2>
+    <p>shop-api <span class="count">1 agent</span></p>
+    <h2>Needs you</h2>
+    <p><i class="lamp wait"></i> Approve a push</p>
+  </nav>
+
+  <section class="centre">
+    <div class="bar"><h3>shop-api</h3><span class="dim">3 live branches, 4 agents touching it</span></div>
+
+    <svg class="tracks" viewBox="0 0 888 336" preserveAspectRatio="xMinYMin slice" role="img" aria-label="Branches of shop-api drawn as tracks, with agents at the end of each">
+      <defs><pattern id="t" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="var(--tile)"/></pattern></defs>
+      <rect width="888" height="336" fill="url(#t)"/>
+      <rect x="336" width="552" height="336" fill="var(--since)"/>
+      <path d="M336 0V336" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 5"/>
+      <text x="344" y="22" class="name">New since Codex reviewer last looked</text>
+
+      <path class="track" d="M0 192H888" stroke="var(--ink)"/>
+      <path class="track" d="M216 192L312 96H672" stroke="var(--a1)"/>
+      <path class="track" d="M480 96L528 144H816" stroke="var(--a2)"/>
+      <path class="track" d="M336 192L408 264H552L624 192" stroke="var(--a3)"/>
+
+      <g class="stud">
+        <circle cx="48" cy="192" r="6"/><circle cx="120" cy="192" r="6"/><circle cx="216" cy="192" r="6"/><circle cx="336" cy="192" r="6"/><circle cx="456" cy="192" r="6"/><circle cx="624" cy="192" r="6"/><circle cx="768" cy="192" r="6"/>
+        <circle cx="384" cy="96" r="6"/><circle cx="480" cy="96" r="6"/><circle cx="576" cy="96" r="6"/>
+        <circle cx="600" cy="144" r="6"/><circle cx="696" cy="144" r="6"/>
+        <circle cx="456" cy="264" r="6"/><circle cx="528" cy="264" r="6"/>
+      </g>
+
+      <text x="8" y="180" class="name">main</text>
+      <text x="350" y="84" class="small">plan/auth</text>
+      <text x="548" y="168" class="small">impl/auth</text>
+      <text x="420" y="290" class="small">fix/n-plus-one</text>
+      <text x="526" y="122" class="small">Order: implement the auth plan</text>
+
+      <circle cx="672" cy="96" r="9" fill="var(--run)" stroke="var(--ink)" stroke-width="2.5"/>
+      <text x="688" y="101" class="name">Cloud planner</text>
+      <circle cx="816" cy="144" r="9" fill="var(--wait)" stroke="var(--ink)" stroke-width="2.5"/>
+      <text x="880" y="126" class="name" text-anchor="end">Local builder</text>
+    </svg>
+
+    <div class="catch">
+      <div class="line">
+        <h2>Catching up Codex reviewer</h2>
+        <span class="dim">9 commits and 14 files since <span class="mono">a31f9c2</span>. About 1,200 tokens, instead of 61,000 to read the project again.</span>
+        <button>Copy brief</button>
+      </div>
+      <table>
+        <tr><td class="mono">e81b0d4</td><td><i class="who" style="background:var(--a2)"></i>Add token refresh route</td><td class="why">Plan step 3. Sessions expired mid-checkout.</td><td class="time">4 min ago</td></tr>
+        <tr><td class="mono">77c2a19</td><td><i class="who" style="background:var(--a1)"></i>Write auth plan and migration notes</td><td class="why">Keep old sessions valid during rollout.</td><td class="time">31 min ago</td></tr>
+        <tr><td class="mono">5d09e3e</td><td><i class="who" style="background:var(--a3)"></i>Load orders with their items in one query</td><td class="why">Order list made 212 queries per page.</td><td class="time">2 h ago</td></tr>
+        <tr><td class="mono">c4417aa</td><td><i class="who" style="background:var(--ink)"></i>Merge fix/n-plus-one</td><td class="why">Reviewed by Felix.</td><td class="time">2 h ago</td></tr>
+        <tr><td class="mono">9ab10f7</td><td><i class="who" style="background:var(--a2)"></i>Add session table migration</td><td class="why">Plan step 2. Runs before the new routes ship.</td><td class="time">3 h ago</td></tr>
+        <tr><td class="mono">31fe8c2</td><td><i class="who" style="background:var(--a2)"></i>Pull the auth plan into a worktree</td><td class="why">Order from Cloud planner, approved by Felix.</td><td class="time">3 h ago</td></tr>
+        <tr><td class="mono">0d6b7e1</td><td><i class="who" style="background:var(--a3)"></i>Add a test for the order list query count</td><td class="why">Stops the slow query coming back.</td><td class="time">4 h ago</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <aside class="inspect">
+    <h3>Local builder</h3>
+    <p class="state"><i class="lamp wait"></i> Waiting for you to approve a push</p>
+    <dl>
+      <dt>Runs on</dt><dd>This PC, in its own worktree of shop-api</dd>
+      <dt>Model</dt><dd>Claude, through Claude Code</dd>
+      <dt>Doing</dt><dd>Implementing the auth plan on <span class="mono">impl/auth</span></dd>
+      <dt>Instructions</dt><dd>AGENTS.md, .claude/agents/builder.md</dd>
+      <dt>Skills</dt><dd>test-driven-development, ponytail</dd>
+      <dt>Access</dt><dd>Edits its worktree. Can't push or touch main.</dd>
+      <dt>Scheduled</dt><dd>Nothing</dd>
+    </dl>
+    <div class="actions"><button class="go">Approve push</button><button>Open chat</button><button>Stop</button></div>
+  </aside>
+</main>
+</body>
+</html>

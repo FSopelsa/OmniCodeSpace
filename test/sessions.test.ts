@@ -1,0 +1,69 @@
+import assert from 'node:assert/strict'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { after, test } from 'node:test'
+import { allSessions, sessionsIn } from '../server/sessions.ts'
+
+const home = mkdtempSync(join(tmpdir(), 'omni-home-'))
+after(() => rmSync(home, { recursive: true, force: true }))
+
+const jsonl = (rows: unknown[]) => rows.map((r) => JSON.stringify(r)).join('\n') + '\n'
+const reply = (id: string, timestamp: string) => ({
+  type: 'assistant', sessionId: 'claude-1', cwd: 'C:\\Work\\Shop', gitBranch: 'impl/auth', timestamp,
+  message: { id, model: 'claude-test', usage: { input_tokens: 10, cache_creation_input_tokens: 5, cache_read_input_tokens: 100, output_tokens: 20 } },
+})
+
+test('reads both tools and survives odd lines', async () => {
+  assert.deepEqual(await allSessions(join(home, 'nobody')), [])
+
+  const claude = join(home, '.claude', 'projects', 'shop')
+  mkdirSync(join(claude, 'subagents'), { recursive: true })
+  writeFileSync(
+    join(claude, 'a.jsonl'),
+    jsonl([{ type: 'custom-title', customTitle: 'Auth work', sessionId: 'claude-1' }, { type: 'agent-setting', agentSetting: 'builder', sessionId: 'claude-1' }, reply('m1', '2026-11-01T10:00:00Z'), reply('m1', '2026-11-01T10:00:01Z'), reply('m2', '2026-11-01T10:05:00Z')]) + 'not json\n',
+  )
+  writeFileSync(join(claude, 'subagents', 'agent-a1.jsonl'), jsonl([reply('s', '2026-11-01T11:00:00Z')]))
+  writeFileSync(join(claude, 'subagents', 'agent-a1.meta.json'), JSON.stringify({ agentType: 'Explore', description: 'Find the auth code' }))
+
+  const codex = join(home, '.codex', 'sessions', '2026', '11', '02')
+  mkdirSync(codex, { recursive: true })
+  writeFileSync(join(home, '.codex', 'session_index.jsonl'), jsonl([{ id: 'codex-1', thread_name: 'Review', updated_at: 'x' }]))
+  writeFileSync(
+    join(codex, 'rollout.jsonl'),
+    jsonl([
+      { type: 'session_meta', timestamp: '2026-11-02T09:00:00Z', payload: { id: 'codex-1', cwd: 'C:/Work/Other', git: { branch: 'main' } } },
+      { type: 'turn_context', timestamp: '2026-11-02T09:00:01Z', payload: { model: 'gpt-test', cwd: 'C:/Work/Other' } },
+      { type: 'event_msg', timestamp: '2026-11-02T09:01:00Z', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 50, cached_input_tokens: 30, output_tokens: 7 } } } },
+    ]),
+  )
+  writeFileSync(
+    join(codex, 'spawned.jsonl'),
+    jsonl([{ type: 'session_meta', timestamp: '2026-11-02T08:00:00Z', payload: { id: 'codex-2', cwd: 'C:/Work/Other', source: { subagent: { thread_spawn: { parent_thread_id: 'codex-1', agent_role: 'reviewer' } } } } }]),
+  )
+
+  const sessions = await allSessions(home)
+  assert.deepEqual(sessions.map((s) => s.id), ['codex-1', 'codex-2', 'agent-a1', 'claude-1'])
+
+  const [codexSession, spawned, subagent, claudeSession] = sessions
+  assert.deepEqual([claudeSession.agent, claudeSession.parent], ['builder', ''])
+  assert.deepEqual([subagent.agent, subagent.parent, subagent.title, subagent.cwd], ['Explore', 'claude-1', 'Find the auth code', 'C:\\Work\\Shop'])
+  assert.deepEqual([spawned.agent, spawned.parent], ['reviewer', 'codex-1'])
+  assert.deepEqual([codexSession.agent, codexSession.parent], ['', ''])
+  assert.equal(claudeSession.title, 'Auth work')
+  assert.equal(claudeSession.branch, 'impl/auth')
+  assert.equal(claudeSession.last, '2026-11-01T10:05:00Z')
+  // m1 appears twice in the log and only counts once.
+  assert.deepEqual(claudeSession.tokens, { input: 30, cached: 200, output: 40 })
+
+  assert.equal(codexSession.title, 'Review')
+  assert.equal(codexSession.model, 'gpt-test')
+  assert.deepEqual(codexSession.tokens, { input: 20, cached: 30, output: 7 })
+})
+
+test('matches folders whatever the slash direction or case, and not by name prefix', async () => {
+  const sessions = await allSessions(home)
+  assert.deepEqual(sessionsIn(sessions, ['c:/work/shop']).map((s) => s.id), ['agent-a1', 'claude-1'])
+  assert.deepEqual(sessionsIn(sessions, ['C:\\Work\\Shop\\']).map((s) => s.id), ['agent-a1', 'claude-1'])
+  assert.deepEqual(sessionsIn(sessions, ['C:/Work/Sho']), [])
+})

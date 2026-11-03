@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prototype C: Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;700;800&family=Overpass+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+  main { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
+  svg { display: block; width: 100%; height: 100%; background: var(--panel); }
+  .zone { fill: var(--sheet); fill-opacity: 0.62; stroke: var(--ink); stroke-width: 1.5; }
+  .zone-name { font-size: 20px; font-weight: 800; }
+  .station { fill: var(--sheet); stroke: var(--ink); stroke-width: 4; }
+  .order { fill: none; stroke: var(--wait); stroke-width: 3.5; stroke-dasharray: 9 7; }
+  .inspect h2 { margin-top: 22px; }
+  .step { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <b>OmniCodeSpace</b><span>Prototype C: the whole workspace as a network, joined by git. Mock data.</span>
+  <button class="push">Start an agent</button>
+</header>
+<main>
+  <svg viewBox="0 0 1120 848" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Map of three places, their project copies and agents, all joined through a shared git remote. An order travels from the cloud planner through the remote to the local builder.">
+    <defs><pattern id="t" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="var(--tile)"/></pattern></defs>
+    <rect width="1120" height="848" fill="url(#t)"/>
+
+    <rect class="zone" x="32" y="32" width="470" height="784"/>
+    <rect class="zone" x="660" y="32" width="428" height="400"/>
+    <rect class="zone" x="660" y="488" width="428" height="328"/>
+    <text class="zone-name" x="52" y="66">This PC</text>
+    <text class="zone-name" x="680" y="66">Cloud</text>
+    <text class="zone-name" x="680" y="522">Laptop</text>
+
+    <!-- Every copy of a project reaches the others through the remote, as git does. -->
+    <g fill="none" stroke="var(--ink)" stroke-width="8" stroke-linejoin="round">
+      <path d="M330 300H480L580 420"/>
+      <path d="M330 600H470L580 420"/>
+      <path d="M800 200H700L580 420"/>
+      <path d="M800 660H700L580 420"/>
+    </g>
+
+    <g fill="none" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M330 300L240 210H130" stroke="var(--a2)"/>
+      <path d="M330 600L240 690H130" stroke="var(--a3)"/>
+      <path d="M800 200L880 120H960" stroke="var(--a1)"/>
+      <path d="M800 200L880 300H960" stroke="var(--a4)"/>
+      <path d="M800 660L880 620H960" stroke="var(--ink)"/>
+    </g>
+
+    <path class="order" d="M880 120L800 200H700L580 420L480 300H330L240 210"/>
+
+    <circle cx="580" cy="420" r="44" fill="var(--ink)"/>
+    <text x="580" y="416" text-anchor="middle" class="name" style="fill:var(--sheet)">Git</text>
+    <text x="580" y="434" text-anchor="middle" class="name" style="fill:var(--sheet)">remote</text>
+
+    <text x="581" y="284" text-anchor="middle" class="name">Order: implement</text>
+    <text x="581" y="302" text-anchor="middle" class="name">the auth plan</text>
+
+    <circle class="station" cx="330" cy="300" r="20"/>
+    <circle class="station" cx="330" cy="600" r="20"/>
+    <circle class="station" cx="800" cy="200" r="20"/>
+    <circle class="station" cx="800" cy="660" r="20"/>
+    <text x="330" y="344" text-anchor="middle" class="name">shop-api</text>
+    <text x="350" y="640" class="name">shop-web</text>
+    <text x="786" y="244" text-anchor="end" class="name">shop-api</text>
+    <text x="800" y="704" text-anchor="middle" class="name">shop-api</text>
+
+    <circle cx="130" cy="210" r="10" fill="var(--wait)" stroke="var(--ink)" stroke-width="2.5"/>
+    <text x="72" y="244" class="name">Local builder</text><text x="72" y="262" class="small">Claude</text>
+    <circle cx="130" cy="690" r="10" fill="var(--run)" stroke="var(--ink)" stroke-width="2.5"/>
+    <text x="72" y="724" class="name">Test runner</text><text x="72" y="742" class="small">Qwen on Ollama</text>
+    <circle cx="960" cy="120" r="10" fill="var(--run)" stroke="var(--ink)" stroke-width="2.5"/>
+    <text x="946" y="154" class="name">Cloud planner</text><text x="946" y="172" class="small">Claude</text>
+    <circle cx="960" cy="300" r="10" fill="var(--sheet)" stroke="var(--ink)" stroke-width="2.5"/>
+    <text x="946" y="334" class="name">Docs writer</text><text x="946" y="352" class="small">Gemini</text>
+    <circle cx="960" cy="620" r="10" fill="var(--sheet)" stroke="var(--ink)" stroke-width="2.5"/>
+    <text x="938" y="654" class="name">Codex reviewer</text><text x="938" y="672" class="small">Codex</text>
+  </svg>
+
+  <aside class="inspect">
+    <h3>Order: implement the auth plan</h3>
+    <p class="state"><i class="lamp wait"></i> Waiting for you to approve the run</p>
+    <dl>
+      <dt>From</dt><dd>Cloud planner, on <span class="mono">plan/auth</span></dd>
+      <dt>To</dt><dd>Local builder, on This PC</dd>
+      <dt>Attached</dt><dd>Plan file, migration notes, 2 commits</dd>
+      <dt>Travels by</dt><dd>A git branch, so it arrives when this PC next fetches</dd>
+      <dt>Access it asks for</dt><dd>Edit a new worktree of shop-api. No push.</dd>
+    </dl>
+    <div class="actions"><button class="go">Approve run</button><button>Read plan</button><button>Decline</button></div>
+    <h2>Progress</h2>
+    <p class="step"><i class="lamp run"></i> Sent and fetched</p>
+    <p class="step"><i class="lamp wait"></i> Your approval</p>
+    <p class="step"><i class="lamp off"></i> Implementing</p>
+    <p class="step"><i class="lamp off"></i> Report back on the branch</p>
+  </aside>
+</main>
+</body>
+</html>

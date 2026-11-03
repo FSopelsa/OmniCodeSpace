@@ -1,0 +1,66 @@
+/* Look: an enamel signal-box panel. Tracks are branches, lamps show where each agent is. */
+:root {
+  --panel: #d8dfd7;
+  --tile: #c5cfc6;
+  --sheet: #f3f5f0;
+  --ink: #16231d;
+  --ink-2: #4e5e56;
+  --rule: #bcc7bd;
+  --run: #1f8a55;
+  --wait: #e0a100;
+  --stop: #cc3322;
+  --a1: #2346c4;
+  --a2: #8a2a7e;
+  --a3: #0e7c86;
+  --a4: #6f6410;
+  --since: rgba(224, 161, 0, 0.2);
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  width: 1440px; height: 900px; overflow: hidden;
+  font: 15px/1.4 Overpass, system-ui, sans-serif;
+  color: var(--ink); background: var(--sheet);
+  display: grid; grid-template-rows: 52px 1fr;
+}
+header { display: flex; align-items: center; gap: 16px; padding: 0 20px; border-bottom: 1px solid var(--rule); }
+header b { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+header span { color: var(--ink-2); }
+header .push { margin-left: auto; }
+button {
+  font: 600 14px Overpass, system-ui, sans-serif; color: var(--ink);
+  background: transparent; border: 1.5px solid var(--ink); border-radius: 3px; padding: 6px 12px;
+  white-space: nowrap;
+}
+button.go { background: var(--ink); color: var(--sheet); }
+.mono { font-family: "Overpass Mono", monospace; font-size: 13px; }
+.dim { color: var(--ink-2); }
+h2 { font-size: 15px; font-weight: 800; }
+h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; }
+.lamp {
+  display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--ink); flex: none;
+}
+.lamp.run { background: var(--run); box-shadow: 0 0 7px var(--run); }
+.lamp.wait { background: var(--wait); box-shadow: 0 0 7px var(--wait); }
+.lamp.off { background: var(--sheet); }
+
+.tree { padding: 16px; border-right: 1px solid var(--rule); overflow: hidden; }
+.tree h2 { margin: 18px 0 6px; }
+.tree h2:first-child { margin-top: 0; }
+.tree p { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 8px; }
+.tree p.on { background: var(--panel); margin: 0 -8px; padding-left: 16px; font-weight: 700; }
+.tree .count { margin-left: auto; color: var(--ink-2); font-size: 13px; }
+.tree p.on .count { padding-right: 8px; }
+
+.inspect { padding: 20px; border-left: 1px solid var(--rule); overflow: hidden; }
+.inspect dl { margin-top: 16px; }
+.inspect dt { font-weight: 700; margin-top: 14px; }
+.inspect dd { margin: 2px 0 0; color: var(--ink-2); }
+.inspect .state { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-weight: 600; }
+.inspect .actions { display: flex; gap: 8px; margin-top: 18px; }
+
+svg text { font-family: Overpass, system-ui, sans-serif; fill: var(--ink); }
+svg .small { font-size: 13px; fill: var(--ink-2); }
+svg .name { font-size: 14px; font-weight: 700; }
+svg .stud { fill: var(--sheet); stroke: var(--ink); stroke-width: 2.5; }
+svg .track { fill: none; stroke-width: 6; stroke-linejoin: round; stroke-linecap: round; }
