@@ -30,3 +30,12 @@ Take the first option that fully works:
 Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.
 
 (Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
+
+## For agents working here
+
+Codex: at the start of a session, run `git omni arrive --agent codex` once. It prints what changed in this repo since you last looked, or nothing if nothing did. If the command fails, carry on.
+
+When you commit, end the message with these two trailer lines, together in its last paragraph, so the next agent knows who changed what and why:
+
+    Agent: <your tool, and your role if you have one>
+    Why: <the reason for the change, in one line>
