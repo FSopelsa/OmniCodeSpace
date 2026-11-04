@@ -17,6 +17,15 @@ Codex: at the start of a session, run \`${CODEX_COMMAND}\` once. It prints what 
 
 ${TRAILERS}`
 const CLAUDE_NOTE = `## Commit trailers\n\n${TRAILERS}`
+const ORDERS_NOTE = `## Sending work to the owner's PC
+
+To hand a task to an agent on the owner's PC, push a branch named \`omni/orders/<short-id>\` to origin. If your git access only lets you push \`claude/*\` branches, push one of those instead. The branch's newest commit adds \`order.md\`, saying what to do and how, and ends its message with:
+
+    Omni-To: Claude Code
+    Omni-Status: open
+
+Use \`Omni-To: Codex\` for Codex. To ask a read-only question about another of the owner's projects, also add \`Omni-Ask: <that project's folder name>\`. Commit any code the order needs on the same branch. The owner approves the order on their PC. The result comes back on the same branch as \`report.md\`, in a commit with \`Omni-Status: done\`.
+`
 
 function addClaudeHook(file: string) {
   let config: any = {}
@@ -44,7 +53,7 @@ function addNote(file: string, note: string, marker: string) {
 }
 
 // Turns on catch-up for one repo. The path to this tool is machine-specific, so only the repo's untracked git config holds it.
-export async function enable(folder: string) {
+export async function enable(folder: string, opts: { orders?: boolean } = {}) {
   const repo = await git(folder, 'rev-parse', '--show-toplevel')
   const changed: string[] = []
   if (addClaudeHook(join(repo, CLAUDE_FILE))) changed.push(CLAUDE_FILE)
@@ -62,5 +71,15 @@ export async function enable(folder: string) {
   // Claude Code's own AGENTS.md fallback didn't load reliably in testing, while an import from CLAUDE.md did.
   const claudeMd = join(repo, 'CLAUDE.md')
   if (existsSync(claudeMd) ? addNote(claudeMd, CLAUDE_NOTE, 'Agent: <your tool') : addNote(claudeMd, '@AGENTS.md\n', '@AGENTS.md')) changed.push('CLAUDE.md')
+
+  if (opts.orders) {
+    // Untracked, like the alias: only this PC fetches orders.
+    await git(repo, 'config', '--local', 'omni.orders', 'true')
+    if (addNote(join(repo, 'AGENTS.md'), ORDERS_NOTE, 'omni/orders/') && !changed.includes('AGENTS.md')) changed.push('AGENTS.md')
+    // Cloud Claude sessions send most orders, and they read CLAUDE.md, which may not import AGENTS.md.
+    const imports = readFileSync(claudeMd, 'utf8').includes('@AGENTS.md')
+    if (!imports && addNote(claudeMd, ORDERS_NOTE, 'omni/orders/') && !changed.includes('CLAUDE.md')) changed.push('CLAUDE.md')
+    changed.push('git config omni.orders')
+  }
   return { repo, changed }
 }

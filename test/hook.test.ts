@@ -144,6 +144,19 @@ test('the alias works the way an agent will call it, also from a subfolder', asy
   assert.equal(hookRun.status, 0)
 })
 
+test('enable --orders turns on orders and tells agents the format, once', async () => {
+  await enable(repo)
+  assert.equal(await git(repo, 'config', '--get', 'omni.orders').catch(() => ''), '')
+  await enable(repo, { orders: true })
+  await enable(repo, { orders: true })
+  assert.equal(await git(repo, 'config', '--get', 'omni.orders'), 'true')
+  const agents = readFileSync(join(repo, 'AGENTS.md'), 'utf8')
+  assert.equal(agents.split("## Sending work to the owner's PC").length, 2)
+  assert.match(agents, /Omni-Status: open/)
+  // This repo's own CLAUDE.md doesn't import AGENTS.md, so Claude needs the note there too.
+  assert.match(readFileSync(join(repo, 'CLAUDE.md'), 'utf8'), /## Sending work to the owner's PC/)
+})
+
 test('enable creates AGENTS.md when a repo has none, and points Claude at it', async () => {
   const fresh = join(work, 'fresh')
   mkdirSync(fresh)

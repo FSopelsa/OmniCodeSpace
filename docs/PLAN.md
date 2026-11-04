@@ -384,7 +384,7 @@ Not looked up: Git Context Controller (a paper), Augment Context Lineage (a vend
 - **Speed:** the Roster's API answers in about 11 ms once logs are cached.
 - **Still open:** the week of real commits with trailers (step 3). `omni enable` ran in OmniCodeSpace on 2026-11-03. Check its commits for `Agent:` and `Why:` around 2026-11-10.
 
-### Start agents *(7 to 9 done, 10 waits for your local models)*
+### Start agents *(7 to 9 done, 10 waits)*
 
 7. **Run an agent in a new worktree.** `git worktree add`, then spawn the CLI (`claude -p` or `codex exec`). This is the first time the app writes, so it adds a per-launch API token and a confirm dialog first. Read Vibe Kanban's approach before starting. *Done when: you can start a task, see it finish and review the branch.* **Done, checked with a real Haiku run from the app's dialog, for $0.02.**
    - **Where:** branch `omni/<task words>-<id>` from the project's current commit, in a folder beside it, `<project>.worktrees/<same name>`. Your checkout isn't touched. Worktrees stay until you remove them with `git worktree remove`.
@@ -398,12 +398,19 @@ Not looked up: Git Context Controller (a paper), Augment Context Lineage (a vend
    - **Codex:** the network is off, so it can't push at all, and there's nothing to approve.
    - **Who can answer:** the agent gets a key that can only ask. Answering needs the token in the page.
    - **Limits:** this is a guardrail against mistakes, not a sandbox. A push from inside a script file isn't caught, and an agent determined to get round it could fetch the page's token. A push to a remote that is a folder on this PC needs no network, so Codex's network switch doesn't stop it. Its sandbox should block the write, but that wasn't tested.
-10. **Local and other models.** Add a local model through OpenCode and Ollama, as a third adapter. *Done when: the same task can run on Claude, Codex or a local model.*
+10. **Local and other models.** Add a local model through OpenCode and Ollama, as a third adapter. *Done when: the same task can run on Claude, Codex or a local model.* **Waits.** Checked 2026-11-04: no Ollama, OpenCode, llama.cpp or LM Studio on this PC. `py3.12\local-media` (ComfyUI image and video) and `py3.12\s7table-fast-3d` (image to 3D) hold no chat model. Needs Ollama, a coding model of about 5 GB, and OpenCode.
 
-### Pass work between agents
+### Pass work between agents *(11 and 12 built, end-to-end check with a cloud session still open)*
 
-11. **Orders over git.** A cloud agent pushes `omni/orders/<id>` holding `order.md` (what to do, how, and attached code), with `Omni-To:` and `Omni-Status:` trailers. Your PC fetches on a timer and shows it under "Needs you". You approve, step 7 runs it, and the result goes back on the same branch. *Done when: your example works end to end: a Claude cloud session orders a local agent to implement its code, and you see the report.*
-12. **Questions between projects.** The same mechanism for read-only requests such as "compare this with that project", which can run with less approval. *Done when: an agent can get an answer from another project.*
+The design is in `docs/superpowers/specs/2026-11-04-orders-design.md`.
+
+11. **Orders over git.** A cloud agent pushes `omni/orders/<id>` holding `order.md` (what to do, how, and attached code), with `Omni-To:` and `Omni-Status:` trailers. Your PC fetches on a timer and shows it under "Needs you". You approve, step 7 runs it, and the result goes back on the same branch. *Done when: your example works end to end: a Claude cloud session orders a local agent to implement its code, and you see the report.* **Built.**
+   - **How:** `omni enable --orders` turns it on per repo and adds the format to `AGENTS.md`. While the app is open, it fetches `omni/orders/*` and `claude/*` from `origin` at most every 5 minutes. After your click it runs the order on its own branch, commits `report.md` with `Omni-Status: done`, and pushes the branch back when you click Send back.
+   - **Checked:** a real Haiku run from the app against a local bare remote, for $0.02. The order was listed, run, reported and sent back, and the remote's tip carried `Omni-Status: done`.
+   - **Still open:** a Claude cloud session ordering a local agent on a real GitHub repo. Record here which branch name it could push, `omni/orders/*` or `claude/*`.
+12. **Questions between projects.** The same mechanism for read-only requests such as "compare this with that project", which can run with less approval. *Done when: an agent can get an answer from another project.* **Built.**
+   - **How:** an order with `Omni-Ask: <project>` for Claude Code starts by itself, one at a time, in that project's own checkout, with `--restricted --tools Read,Grep,Glob --strict-mcp-config`. A question for Codex waits for a click and runs in Codex's `read-only` sandbox, until that sandbox has had the same real check. Sending the answer back needs your click. The app's own git commands on order branches run no hooks, because the sender controls the branch.
+   - **Checked:** a real Haiku question, asked to create a file, run `git status` and describe `README.md`. It created nothing, its Bash call was refused as an unavailable tool, and it answered from `README.md`. To keep the cost down, it was started through the Run path with Haiku. Starting by itself is covered by the tests.
 
 ### Later, if it earns it
 
@@ -432,7 +439,7 @@ Everything has a default, so none of these block step 1.
   - **In practice:** the app only starts the official, unmodified CLI on your own machine, for you. If `ANTHROPIC_API_KEY` is set, `claude -p` uses the key instead of your subscription. Older news reports: [The Register](https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access). Don't take this as legal advice.
 - **Log formats can change.** Claude Code and Codex logs are internal, so an update could break the reader. The parsers skip what they don't know, and CC Switch's MIT parsers are a reference when that happens.
 - **Cloud sessions are invisible locally.** Their logs aren't on this PC, and I found no public API listing them. You'd see only what they push, which is another reason orders use git.
-- **Orders are untrusted input.** A branch that tells an agent what to do is a prompt-injection and remote-code path. Nothing runs without your approval, order text is treated as data, and only branches from your own remote count. Consider signed commits before ever allowing auto-run.
+- **Orders are untrusted input.** A branch that tells an agent what to do is a prompt-injection and remote-code path. Orders run only after your click, order text is treated as data, and only branches from `origin`, in repos you turned on, count. Claude Code questions start by themselves, but their tools can only read, and the app runs no git hooks from an order branch. Anyone who can push can still spend your usage on questions. Consider signed commits before ever allowing orders to run by themselves.
 - **Briefs carry other people's words.** Catch-up puts commit messages into an agent's context automatically, and a hostile message could try to steer it. The brief tells the agent to treat them as information, which lowers the risk without removing it. Only enable catch-up in repos whose commits you already trust. Claude Code's own start-of-session git snapshot has a similar exposure.
 - **Codex and `.git`.** OpenAI's docs say `.git` is read-only in the `workspace-write` sandbox. In my Windows test the pointer moved anyway, but a commit was blocked at `.git/index.lock`. If the pointer is blocked elsewhere, the brief still arrives and repeats next session until the pointer can move.
 - **Merge conflicts.** Worktrees keep agents apart while working, and conflicts still arrive at merge time. Show them clearly, and let a person decide.
@@ -450,6 +457,11 @@ Everything has a default, so none of these block step 1.
 - **Runs live in memory.** Their branches, worktrees and tool logs stay, but the Roster's "Started from here" list empties when the server restarts.
 - **A run has no time limit.** If the tool can't reach its API, it waits silently. A Codex run did this while your Headroom proxy on port 8787 was down. Use Stop.
 - **The app never removes worktrees.** Remove one with `git worktree remove <folder>` once its branch is merged or dropped.
+- **Orders arrive only while the app is open,** and at most every 5 minutes, unless you open the page or click Check now.
+- **`claude/*` branches count as orders** when their newest commit has `Omni-Status`, because cloud sessions may only be able to push those.
+- **No Dismiss button for orders.** Delete the branch on the remote instead. A question that failed to start, or whose report commit failed, waits until the server restarts.
+- **Questions use the tool's default model.** The app has no model choice for them.
+- **Codex questions wait for a click** until Codex's `read-only` sandbox has a real check on this PC.
 - **Map:** up to 4 agents per tool and 2 remotes are drawn, and the details panel lists the rest. Dependencies are read from `package.json`, `pom.xml`, Gradle, `requirements.txt` and `.csproj` files only.
 - **Schedules:** only Codex automations are read, and only daily, weekly and hourly rules.
 - A forked Claude chat starts from the tool's shared pointer, so it can miss changes its parent chat hadn't heard about. It stays silent rather than saying something false.

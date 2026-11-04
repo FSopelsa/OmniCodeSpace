@@ -26,7 +26,10 @@ for await (const chunk of process.stdin) task += chunk
 const say = (o) => console.log(JSON.stringify(o))
 say({ type: 'system', subtype: 'init', model: 'fake-model' })
 if (process.argv[2] === 'hang') setInterval(() => {}, 1000)
-else {
+else if (process.argv[2] === 'quick') {
+  say({ type: 'assistant', message: { content: [{ type: 'text', text: 'cwd ' + process.cwd() }] } })
+  say({ type: 'result', num_turns: 1, permission_denials: [] })
+} else {
   say({ type: 'assistant', message: { content: [{ type: 'text', text: 'Working on: ' + task }] } })
   writeFileSync('hello.txt', 'hi\\n')
   execFileSync('git', ['add', 'hello.txt'])
@@ -85,12 +88,41 @@ test('turns Claude Code and Codex output into readable lines', () => {
   assert.deepEqual(describe('Claude Code', ''), [])
 })
 
+test('a read-only run says so when it starts', () => {
+  const init = (tools?: string[]) => describe('Claude Code', JSON.stringify({ type: 'system', subtype: 'init', model: 'm', tools }))[0].text
+  assert.equal(init(['Read', 'Grep', 'Glob']), 'Started m, can only read')
+  assert.equal(init(['Read', 'Edit', 'Bash']), 'Started m, edits allowed in this worktree')
+  assert.equal(init(), 'Started m, edits allowed in this worktree')
+})
+
 test('Codex runs get no network, and Claude runs get the push gate', () => {
   assert.ok(command('Codex', '')[1].includes('sandbox_workspace_write.network_access=false'))
   const claude = command('Claude Code', 'haiku')[1]
   assert.match(claude[claude.indexOf('--settings') + 1], /PreToolUse.*Bash\|PowerShell.*gate\.ts/)
   assert.deepEqual(claude.slice(-2), ['--model', 'haiku'])
   assert.ok(claude.includes('Bash(git commit:*)') && !claude.some((a) => /push/.test(a) && !a.includes('gate')))
+})
+
+test('read-only commands can only read', () => {
+  const [, claude] = command('Claude Code', 'haiku', true)
+  for (const flag of ['--restricted', '--strict-mcp-config', '-p', 'stream-json']) assert.ok(claude.includes(flag), flag)
+  assert.equal(claude[claude.indexOf('--tools') + 1], 'Read,Grep,Glob')
+  for (const flag of ['--permission-mode', '--settings', '--allowedTools']) assert.ok(!claude.includes(flag), flag)
+  const [, codex] = command('Codex', '', true)
+  assert.equal(codex[codex.indexOf('-s') + 1], 'read-only')
+  assert.ok(!codex.includes('workspace-write'))
+})
+
+test('a run can use an existing branch, another folder, and a callback that ends it', async () => {
+  await git(repo, 'branch', 'omni/orders/t1')
+  let ended: Run | undefined
+  const run = await startRun(repo, { tool: 'Claude Code', task: 'x', branch: 'omni/orders/t1', from: 'omni/orders/t1', cwd: root, order: { branch: 'omni/orders/t1', ask: '' },
+    onEnd: async (r) => { ended = { ...r }; assert.equal(r.status, 'finished') } }, address(), fake('quick'))
+  assert.equal(run.branch, 'omni/orders/t1')
+  assert.ok(run.worktree.endsWith('omni-orders-t1'))
+  const done = await until(run.id, (r) => r.status === 'finished')
+  assert.ok(ended, 'onEnd ran before the status changed')
+  assert.ok(done.lines.some((l) => l.text.includes(root)), 'the agent ran in cwd')
 })
 
 test('a run gets its own branch and worktree, waits for your click to push, and can be reviewed', async () => {

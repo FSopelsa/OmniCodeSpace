@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { devNull } from 'node:os'
 import { readdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -19,13 +20,16 @@ export type Commit = {
 
 export type Worktree = { path: string; branch: string }
 
+// The sender of an order controls its branch, including any hooks folder it tracks, so the app's own git calls there run no hooks.
+export const NO_HOOKS = ['-c', `core.hooksPath=${devNull}`]
+
 export async function git(repo: string, ...args: string[]) {
   // fsmonitor is the one setting in a repo's own config that makes read-only commands run a program.
   const { stdout } = await run('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], { maxBuffer: 64 * 1024 * 1024 })
   return stdout.trimEnd()
 }
 
-const rev = (repo: string, ref: string) => git(repo, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).catch(() => '')
+export const rev = (repo: string, ref: string) => git(repo, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).catch(() => '')
 
 const AGENT_NAME = /^[A-Za-z0-9]+([._-][A-Za-z0-9]+)*$/
 const BOT = /claude|codex|gemini|copilot|cursor|qwen|opencode|aider|devin/i

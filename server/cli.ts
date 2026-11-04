@@ -4,6 +4,7 @@ import { arrive, catchup, markSeen } from './git.ts'
 
 const USAGE = `Usage, from inside any git repo:
   omni enable                   Catch up Claude Code and Codex automatically in this repo
+  omni enable --orders          Also take orders from agents elsewhere (see README)
   omni catchup --agent <name>   Print what changed since this agent last looked
   omni seen --agent <name>      Record that this agent is now up to date
   omni arrive --agent <name>    Print any news, then record the agent as up to date
@@ -13,7 +14,7 @@ Add --repo <path> to point at another repo.`
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
-  options: { agent: { type: 'string' }, repo: { type: 'string' } },
+  options: { agent: { type: 'string' }, repo: { type: 'string' }, orders: { type: 'boolean' } },
 })
 const [command] = positionals
 const repo = values.repo ?? process.cwd()
@@ -26,7 +27,7 @@ const agent = values.agent ?? ''
 
 try {
   if (command === 'enable') {
-    const { repo: root, changed } = await enable(repo)
+    const { repo: root, changed } = await enable(repo, { orders: values.orders })
     console.log(changed.length ? `Turned on catch-up in ${root}, changing: ${changed.join(', ')}` : `Catch-up was already on in ${root}.`)
     console.log('New sessions there catch up from now on. Review AGENTS.md and commit it if you want to keep the note.')
   } else if (command === 'hook') {

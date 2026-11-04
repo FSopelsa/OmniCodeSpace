@@ -3,11 +3,12 @@ import type { Commit, Worktree } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
 import type { AgentDef, Named, Setup } from '../server/setup.ts'
 import { MapView } from './Map.tsx'
+import { useOrders } from './Orders.tsx'
 import { Roster } from './Roster.tsx'
 import { StartDialog } from './Runs.tsx'
 import { Tracks } from './Tracks.tsx'
 import { AgentInfo, Names, agentRows } from './parts.tsx'
-import { Lamp, ago, button, count, isLive, modelName, sessionName, useJson } from './ui.tsx'
+import { Lamp, ago, button, count, isLive, modelName, primary, sessionName, useJson } from './ui.tsx'
 
 type Summary = { name: string; path: string; branch: string; last: string; changed: number }
 type Detail = Summary & {
@@ -247,12 +248,14 @@ export function App() {
   const [view, setView] = useState<keyof typeof VIEWS>('tracks')
   const [run, setRun] = useState<string>()
   const [starting, setStarting] = useState(false)
+  const orders = useOrders()
+  const waiting = orders.data?.orders.filter((o) => o.state === 'open' || o.state === 'ready').length ?? 0
   const repos = [...(data?.repos ?? [])].sort((a, b) => b.last.localeCompare(a.last))
   const current = path ?? repos[0]?.path
 
   return (
-    <div className="grid min-h-screen grid-rows-[52px_1fr] lg:h-screen">
-      <header className="flex items-center gap-4 border-b border-rule px-5">
+    <div className="grid min-h-screen grid-rows-[auto_1fr] lg:h-screen">
+      <header className="flex min-h-[52px] flex-wrap items-center gap-x-4 gap-y-2 border-b border-rule px-5 py-2">
         <b className="text-lg font-extrabold tracking-tight">OmniCodeSpace</b>
         <nav aria-label="Views" className="flex gap-1">
           {Object.entries(VIEWS).map(([key, label]) => (
@@ -261,7 +264,8 @@ export function App() {
             </button>
           ))}
         </nav>
-        <button onClick={() => setStarting(true)} disabled={!repos.length} className={`${button} ml-auto`}>Start an agent</button>
+        {waiting > 0 && <button onClick={() => setView('roster')} className={`${primary} ml-auto`}>Needs you · {waiting}</button>}
+        <button onClick={() => setStarting(true)} disabled={!repos.length} className={`${button} ${waiting > 0 ? '' : 'ml-auto'}`}>Start an agent</button>
       </header>
       {starting && (
         <StartDialog
@@ -275,7 +279,7 @@ export function App() {
           }}
         />
       )}
-      {view === 'roster' ? <Roster selected={run} onSelect={setRun} /> : (
+      {view === 'roster' ? <Roster selected={run} onSelect={setRun} orders={orders} /> : (
       <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[220px_1fr]">
         <nav aria-label="Projects" className="border-b border-rule p-4 lg:overflow-y-auto lg:border-r lg:border-b-0">
           <h2 className="font-extrabold">This PC</h2>

@@ -4,7 +4,7 @@ A local workspace for coding agents and the people running them, with git as the
 
 ![OmniCodeSpace showing a project's branches as tracks](docs/prototypes/scaffold-demo.png)
 
-**Status: early.** Passing work between agents, local models and other machines are planned in [docs/PLAN.md](docs/PLAN.md), and the [prototypes](docs/prototypes) show where it's heading.
+**Status: early.** Local models and other machines are planned in [docs/PLAN.md](docs/PLAN.md), and the [prototypes](docs/prototypes) show where it's heading.
 
 ## What it does today
 
@@ -18,6 +18,7 @@ A local workspace for coding agents and the people running them, with git as the
 - **Roster:** today's work on this PC as a timetable, one row per agent and project, with scheduled Codex automations and their next run.
 - **Map:** one project as the hub of everything that works on it: worktrees, Claude Code, Codex and their agents, remotes. Select a node for its models, plugins, MCP servers, skills, instruction files and tech stack.
 - **Start an agent:** runs Claude Code or Codex on a task in a new branch and folder, streams its output, can stop it, waits for your click before Claude Code pushes, and shows the branch for review.
+- **Orders:** takes tasks that agents elsewhere push as git branches, runs them after your click, and sends a report back on the same branch. Read-only questions about another project start by themselves.
 
 ## Requirements
 
@@ -101,13 +102,51 @@ The app finds `claude` on your PATH, and Codex inside the Codex desktop app's fo
 
 The push check is a guardrail against mistakes, not a sandbox. It reads the command an agent runs, so a push from inside a script isn't caught.
 
+## Orders from agents elsewhere
+
+An agent somewhere else, such as a Claude cloud session, can hand work to an agent on this PC by pushing a branch. You approve it here, and the result goes back on the same branch.
+
+Turn it on for each repo where you want it:
+
+```bash
+node path/to/OmniCodeSpace/server/cli.ts enable --orders --repo path/to/your/repo
+```
+
+This does everything `enable` does, sets `omni.orders=true` in the repo's own git config, and adds a section to `AGENTS.md` that tells agents the format. Commit and push that change, so that agents working from the remote can read it.
+
+**The format.** An order is a branch on `origin` named `omni/orders/<id>`, or `claude/<name>` for agents that may only push those. Its newest commit adds `order.md`, saying what to do, and ends its message with:
+
+```text
+Omni-To: Claude Code
+Omni-Status: open
+```
+
+`Omni-To: Codex` picks Codex instead. A branch whose newest commit has no `Omni-Status` trailer isn't an order.
+
+**What happens here:**
+
+- **Checking.** While the app is open, it fetches order branches from `origin` at most every 5 minutes, and lists them under **Needs you** in the Roster. **Check now** fetches at once. Orders don't arrive while the app is closed.
+- **Run** shows the order's text and starts Claude Code or Codex on the order's own branch, in a folder beside the project, like any other run. If the sender changed the order after you opened it, Run refuses, so a run never starts on text you haven't read. Pushes still wait for your click.
+- **The report.** When the agent ends, the app commits a `report.md` holding the outcome and the agent's last message, with `Omni-Status: done`, `failed` or `stopped`. Needs you shows the report before you send it.
+- **Send back** pushes the branch to `origin`, never forced. If the sender pushed again in the meantime, the push is refused and nothing is lost. Sort the branch out in git.
+- **No git hooks.** The sender controls the branch, including any hooks folder it tracks, so the app's own git commands on order branches run no hooks. That includes your own hooks, for the report commit.
+
+**Questions.** Adding `Omni-Ask: <project folder>` turns an order into a read-only question about another project under your roots, which must also have orders turned on.
+
+- A question for Claude Code starts by itself, without a click, one at a time, in that project's own checkout. Claude Code runs with only its Read, Grep and Glob tools, and without your settings, hooks or MCP servers. It uses the tool's default model.
+- A question for Codex waits for your click. Its `read-only` sandbox hasn't been checked on a real run here, and it can read outside the project.
+- Sending the answer back still needs your click.
+- Anyone who can push to the repo can spend your Claude Code usage on questions. Turn orders on only where you trust everyone with push access.
+
+**Leftovers.** Merging an order branch brings its `order.md` and `report.md` along. Order folders stay until you remove them with `git worktree remove <folder>`. To drop an order, delete its branch on the remote.
+
 ## Data and privacy
 
-- Everything stays on your computer. There are no accounts, no telemetry and no cloud service.
+- Everything stays on your computer unless you push it. There are no accounts, no telemetry and no cloud service. Send back pushes an order's branch, including its `report.md` with this PC's name, the agent's last message and, for a question, what it read in the other project.
 - The server listens on `127.0.0.1` and refuses requests from other hosts and from other websites. Anything that writes needs a token that is made each time the server starts and is put into the page.
 - Session logs can contain anything you or an agent typed, including secrets. The app shows their metadata (title, model, branch, folder, tokens), never the conversation.
 - To show what agents can touch, the app reads Claude Code's and Codex's settings files. MCP servers appear by name only. Their commands, arguments and environment values, where keys often live, never reach the browser.
-- The web app writes only when you start an agent: it adds a branch and a worktree folder, and runs the tool there. The command line writes too: `enable` makes the changes listed above, and `seen`, `arrive` and `hook` move refs under `refs/omni/`.
+- The web app writes when you start an agent: it adds a branch and a worktree folder, and runs the tool there. In repos with orders turned on, it also fetches order branches from `origin`, starts questions, commits each order's `report.md`, and pushes an order branch when you click Send back. The command line writes too: `enable` makes the changes listed above, and `seen`, `arrive` and `hook` move refs under `refs/omni/`.
 - Remote URLs are shown without any login they contain.
 - Briefs go into the agent's conversation, so whichever model provider that tool uses receives them, as it does everything else in the session.
 
@@ -129,6 +168,7 @@ npm run check
 - `server/schedules.ts`: reads scheduled Codex automations.
 - `server/stack.ts`: what a project is built with, and its remotes.
 - `server/runs.ts`: starts, streams, stops and reviews agent runs. `server/gate.ts` is the hook that holds a push for your approval.
+- `server/orders.ts`: fetches, lists, runs and sends back orders and questions from other agents.
 - `server/api.ts`: the local API.
 - `server/cli.ts`: the command line.
 - `server/enable.ts`: turns on automatic catch-up for a repo.

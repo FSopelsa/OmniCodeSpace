@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { Order } from '../server/orders.ts'
 import type { Line, Run, Tool } from '../server/runs.ts'
 import { Lamp, ago, button, clock, post, primary, useJson } from './ui.tsx'
 
@@ -9,10 +10,11 @@ const STATUS: Record<Run['status'], string> = { running: 'Working', waiting: 'Wa
 const lampOf = (run: Run) => (run.status === 'waiting' ? 'wait' : run.status === 'running' ? 'run' : 'off')
 const code = 'font-mono text-[13px]'
 
-export function StartDialog({ repos, current, onClose, onStarted }: { repos: Repo[]; current?: string; onClose: () => void; onStarted: (run: Run) => void }) {
+// With an order, the project and the task come from the order.
+export function StartDialog({ repos, current, order, onClose, onStarted }: { repos: Repo[]; current?: string; order?: Order; onClose: () => void; onStarted: (run: Run) => void }) {
   const ref = useRef<HTMLDialogElement>(null)
-  const [repo, setRepo] = useState(current ?? repos[0]?.path ?? '')
-  const [tool, setTool] = useState<Tool>('Claude Code')
+  const [repo, setRepo] = useState(order?.repo ?? current ?? repos[0]?.path ?? '')
+  const [tool, setTool] = useState<Tool>(order?.to ?? 'Claude Code')
   const [model, setModel] = useState('')
   const [task, setTask] = useState('')
   const [error, setError] = useState('')
@@ -20,14 +22,14 @@ export function StartDialog({ repos, current, onClose, onStarted }: { repos: Rep
   useEffect(() => {
     ref.current?.showModal()
   }, [])
-  const name = repos.find((r) => r.path === repo)?.name ?? 'the project'
+  const name = order?.project ?? repos.find((r) => r.path === repo)?.name ?? 'the project'
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError('')
     try {
-      onStarted(await post<Run>('/api/runs', { repo, tool, model, task }))
+      onStarted(await (order ? post<Run>('/api/orders/run', { repo, branch: order.branch, sha: order.sha, tool, model }) : post<Run>('/api/runs', { repo, tool, model, task })))
     } catch (err) {
       setError((err as Error).message)
       setBusy(false)
@@ -37,13 +39,17 @@ export function StartDialog({ repos, current, onClose, onStarted }: { repos: Rep
   return (
     <dialog ref={ref} onClose={onClose} aria-labelledby="start-title" className="m-auto w-[min(640px,calc(100%-2rem))] border-2 border-ink bg-sheet p-5 text-ink backdrop:bg-ink/40">
       <form onSubmit={submit} className="grid gap-3">
-        <h2 id="start-title" className="text-xl font-extrabold">Start an agent</h2>
-        <label className="grid gap-1 font-semibold">
-          Project
-          <select value={repo} onChange={(e) => setRepo(e.target.value)} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal">
-            {repos.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
-          </select>
-        </label>
+        <h2 id="start-title" className="text-xl font-extrabold">{order ? 'Run this order' : 'Start an agent'}</h2>
+        {order ? (
+          <p><span className="font-semibold">Project</span> {order.project}, from {order.author}</p>
+        ) : (
+          <label className="grid gap-1 font-semibold">
+            Project
+            <select value={repo} onChange={(e) => setRepo(e.target.value)} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal">
+              {repos.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
+            </select>
+          </label>
+        )}
         <fieldset className="flex flex-wrap gap-4">
           <legend className="mb-1 font-semibold">Tool</legend>
           {(['Claude Code', 'Codex'] as const).map((t) => (
@@ -56,14 +62,27 @@ export function StartDialog({ repos, current, onClose, onStarted }: { repos: Rep
           Model <span className="text-sm font-normal text-ink-2">Leave empty for the tool's default, or write one such as sonnet, haiku or gpt-6.1-terra.</span>
           <input value={model} onChange={(e) => setModel(e.target.value)} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal" />
         </label>
-        <label className="grid gap-1 font-semibold">
-          Task
-          <textarea required value={task} onChange={(e) => setTask(e.target.value)} rows={5} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal" />
-        </label>
+        {order ? (
+          <div className="grid gap-1">
+            <p className="font-semibold">The order, as its sender wrote it</p>
+            <pre className="max-h-72 overflow-auto border border-rule p-2 font-mono text-[13px] whitespace-pre-wrap">{order.text}</pre>
+          </div>
+        ) : (
+          <label className="grid gap-1 font-semibold">
+            Task
+            <textarea required value={task} onChange={(e) => setTask(e.target.value)} rows={5} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal" />
+          </label>
+        )}
         <div className="bg-panel p-3 text-sm">
           <p className="font-semibold">What happens</p>
-          <p>A new branch, <span className={code}>omni/…</span>, starts from {name}'s current commit, in a new folder beside it: <span className={code}>{name}.worktrees</span>. Your own checkout isn't touched.</p>
-          {tool === 'Claude Code' ? (
+          {order ? (
+            <p>The agent works on the order's own branch, <span className={code}>{order.branch}</span>, in a new folder beside the project: <span className={code}>{name}.worktrees</span>. Your own checkout isn't touched.</p>
+          ) : (
+            <p>A new branch, <span className={code}>omni/…</span>, starts from {name}'s current commit, in a new folder beside it: <span className={code}>{name}.worktrees</span>. Your own checkout isn't touched.</p>
+          )}
+          {order?.ask ? (
+            <p className="mt-1">This is a question, so {tool} can only read: it works in {order.ask}'s own checkout{tool === 'Claude Code' ? ' with just its Read, Grep and Glob tools' : ', in its read-only sandbox, which can also read outside the project'}. Its answer becomes report.md on the order's branch.</p>
+          ) : tool === 'Claude Code' ? (
             <p className="mt-1">Claude Code edits and commits there without asking. Other commands follow your Claude Code permission rules, and any they don't allow are refused. A push waits for your click here.</p>
           ) : (
             <p className="mt-1">Codex works in its workspace-write sandbox with the network off, so it can't push. The sandbox keeps .git read-only, so its changes stay uncommitted for you to review. Codex also marks the project as trusted in your Codex settings.</p>
@@ -106,11 +125,12 @@ export function RunList({ selected, onSelect }: { selected?: string; onSelect: (
 
 const LINE_STYLE: Record<Line['kind'], string> = { say: 'whitespace-pre-wrap', tool: `${code} text-ink-2 break-all`, error: 'font-semibold text-stop break-words', note: 'text-ink-2' }
 
-export function RunPanel({ id, onClose }: { id: string; onClose: () => void }) {
+export function RunPanel({ id, onClose, onSent }: { id: string; onClose: () => void; onSent?: () => void }) {
   const [run, setRun] = useState<Run>()
   const [lines, setLines] = useState<Line[]>([])
   const [gone, setGone] = useState(false)
   const [error, setError] = useState('')
+  const [sent, setSent] = useState('')
   const end = useRef<HTMLLIElement>(null)
 
   useEffect(() => {
@@ -133,6 +153,7 @@ export function RunPanel({ id, onClose }: { id: string; onClose: () => void }) {
   const over = run && ['finished', 'failed', 'stopped'].includes(run.status)
   const { data: review } = useJson<Review>(over ? `/api/runs/review?id=${encodeURIComponent(id)}` : null)
   const act = (path: string, body: object) => post(path, { id, ...body }).catch((e) => setError(e.message))
+  const send = (r: Run) => post('/api/orders/send', { repo: r.repo, branch: r.branch }).then(() => (setSent('Sent.'), onSent?.()), (e) => setSent(e.message))
 
   if (gone) return <aside className="border-t border-rule p-5 lg:border-t-0 lg:border-l">This run is gone. Runs are forgotten when the server restarts, but its branch and folder are still there.</aside>
   if (!run) return <aside className="border-t border-rule p-5 text-ink-2 lg:border-t-0 lg:border-l">Connecting to the run</aside>
@@ -174,7 +195,13 @@ export function RunPanel({ id, onClose }: { id: string; onClose: () => void }) {
       {review && (
         <>
           <h3 className="mt-4 font-extrabold">Review</h3>
-          <p className="text-sm text-ink-2">{review.commits.length === 1 ? '1 commit on the branch' : `${review.commits.length || 'No'} commits on the branch`}{review.uncommitted.length > 0 && `, ${review.uncommitted.length} files not committed`}. Merge or push it yourself once you're happy.</p>
+          <p className="text-sm text-ink-2">{review.commits.length === 1 ? '1 commit on the branch' : `${review.commits.length || 'No'} commits on the branch`}{review.uncommitted.length > 0 && `, ${review.uncommitted.length} files not committed`}. {run.order ? 'Send back pushes this branch to origin.' : "Merge or push it yourself once you're happy."}</p>
+          {run.order && (
+            <div className="mt-2 flex items-center gap-2">
+              <button onClick={() => send(run)} disabled={sent === 'Sent.'} className={primary}>Send back</button>
+              {sent && <span role="status" className={sent === 'Sent.' ? '' : 'font-semibold text-stop'}>{sent}</span>}
+            </div>
+          )}
           <ul className={`${code} mt-1`}>{review.commits.map((c) => <li key={c}>{c}</li>)}</ul>
           {review.uncommitted.length > 0 && <ul className={`${code} mt-1 text-ink-2`}>{review.uncommitted.map((c) => <li key={c}>{c}</li>)}</ul>}
           {review.diff && <pre className={`${code} mt-2 max-h-96 overflow-auto border border-rule p-2 text-[12px] whitespace-pre`}>{review.diff}</pre>}

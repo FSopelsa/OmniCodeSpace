@@ -1,6 +1,7 @@
 import type { Schedule } from '../server/schedules.ts'
 import { dayRows, type RosterSession, type Row } from './roster.ts'
 import { describe, nextTime } from './rrule.ts'
+import { NeedsYou, type useOrders } from './Orders.tsx'
 import { RunList, RunPanel } from './Runs.tsx'
 import { Lamp, ago, clock, isLive, modelName, sessionName, useJson } from './ui.tsx'
 
@@ -84,7 +85,7 @@ function Card({ row }: { row: Row }) {
   )
 }
 
-export function Roster({ selected, onSelect }: { selected?: string; onSelect: (id?: string) => void }) {
+export function Roster({ selected, onSelect, orders }: { selected?: string; onSelect: (id?: string) => void; orders: ReturnType<typeof useOrders> }) {
   const { data, error } = useJson<RosterData>('/api/roster', 5000)
   const now = new Date()
   const day = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -101,6 +102,7 @@ export function Roster({ selected, onSelect }: { selected?: string; onSelect: (i
         <span className="text-ink-2">{day.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
       </div>
 
+      <NeedsYou orders={orders} onSelect={onSelect} />
       <RunList selected={selected} onSelect={onSelect} />
 
       <section className="px-5 pb-4" aria-label="This PC">
@@ -130,11 +132,11 @@ export function Roster({ selected, onSelect }: { selected?: string; onSelect: (i
         </section>
         <section aria-label="Elsewhere">
           <h2 className="font-extrabold">Cloud and other machines</h2>
-          <p className="mt-1 text-ink-2">Their logs stay where they ran, so they don't show here. They'll appear through what they push to git: orders at step 11, other machines at step 14.</p>
+          <p className="mt-1 text-ink-2">Their logs stay where they ran, so they don't show here. Their orders appear under Needs you, in projects where orders are on. Other machines come at step 14.</p>
         </section>
       </div>
     </div>
-    {selected && <RunPanel key={selected} id={selected} onClose={() => onSelect(undefined)} />}
+    {selected && <RunPanel key={selected} id={selected} onClose={() => onSelect(undefined)} onSent={() => orders.check()} />}
     </div>
   )
 }

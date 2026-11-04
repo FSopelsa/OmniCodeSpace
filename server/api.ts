@@ -5,6 +5,7 @@ import { readdir } from 'node:fs/promises'
 import { homedir, hostname } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { catchup, findRepos, repoDetail, repoSummary } from './git.ts'
+import { ORDER_BRANCH, checkOrders, runOrder, sendOrder } from './orders.ts'
 import { schedules } from './schedules.ts'
 import { allSessions, projectOf, sessionsIn } from './sessions.ts'
 import { answerRun, askRun, listRuns, reviewRun, startRun, stopRun, watchRun } from './runs.ts'
@@ -33,6 +34,12 @@ async function knownRepo(path: string | null) {
   const repos = await findRepos(roots())
   if (!path || !repos.includes(path)) throw Object.assign(new Error('That folder is not a repo in this workspace.'), { status: 404 })
   return path
+}
+
+// A branch name goes into folder names and git arguments, so only order branches get through.
+function orderBranch(branch: unknown) {
+  if (typeof branch !== 'string' || !ORDER_BRANCH.test(branch)) throw new Error("That isn't an order branch.")
+  return branch
 }
 
 async function route(url: URL) {
@@ -79,13 +86,21 @@ async function write(path: string, body: any, req: IncomingMessage) {
   // An agent's gate hook can only ask, with its own run's key. Everything else needs the page's token.
   if (path === '/runs/ask') return { allow: await askRun(body.run, body.key, body.command) }
   if (req.headers['x-omni-token'] !== token) throw Object.assign(new Error('Reload the page: the server has restarted since it loaded.'), { status: 403 })
+  const self = `http://${req.headers.host}/api`
   switch (path) {
     case '/runs':
-      return startRun(await knownRepo(body.repo), body, `http://${req.headers.host}/api`)
+      // Only these fields: the rest of startRun's options are for orders, set on the server.
+      return startRun(await knownRepo(body.repo), { tool: body.tool, task: body.task, model: body.model }, self)
     case '/runs/stop':
       return stopRun(body.id)
     case '/runs/answer':
       return answerRun(body.id, body.allow === true)
+    case '/orders/check':
+      return checkOrders({ repos: await findRepos(roots()), api: self, now: body.now === true })
+    case '/orders/run':
+      return runOrder(await knownRepo(body.repo), orderBranch(body.branch), { tool: body.tool, model: body.model, sha: String(body.sha) }, { repos: await findRepos(roots()), api: self })
+    case '/orders/send':
+      return sendOrder(await knownRepo(body.repo), orderBranch(body.branch), await findRepos(roots()))
     default:
       throw Object.assign(new Error('No such route.'), { status: 404 })
   }
