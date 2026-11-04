@@ -123,7 +123,7 @@ type StartOptions = {
   from?: string
   // Where the agent runs, when that isn't the worktree.
   cwd?: string
-  readOnly?: boolean
+  // A question (order.ask set) always runs read-only.
   order?: Run['order']
   // Awaited when the agent exits, before the run's status changes.
   onEnd?: (run: Run) => Promise<void>
@@ -161,7 +161,7 @@ export async function startRun(repo: string, opts: StartOptions, api: string, cm
   const live: Live = { run, key: randomBytes(16).toString('hex'), listeners: new Set() }
   runs.set(id, live)
 
-  const [bin, args] = cmd ?? command(tool, model, opts.readOnly)
+  const [bin, args] = cmd ?? command(tool, model, Boolean(order?.ask))
   // The agent gets a key that can only ask for approval. Approving needs the page's token, which it isn't given.
   const env = { ...process.env, OMNI_API: api, OMNI_RUN: id, OMNI_ASK_KEY: live.key }
   const child = spawn(bin, args, { cwd: opts.cwd ?? worktree, env, windowsHide: true, detached: process.platform !== 'win32' })

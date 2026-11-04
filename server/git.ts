@@ -25,7 +25,9 @@ export const NO_HOOKS = ['-c', `core.hooksPath=${devNull}`]
 
 export async function git(repo: string, ...args: string[]) {
   // fsmonitor is the one setting in a repo's own config that makes read-only commands run a program.
-  const { stdout } = await run('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], { maxBuffer: 64 * 1024 * 1024 })
+  // No prompts, so a fetch or push without a saved login fails at once instead of opening a sign-in window.
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' }
+  const { stdout } = await run('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], { env, timeout: 120_000, maxBuffer: 64 * 1024 * 1024 })
   return stdout.trimEnd()
 }
 

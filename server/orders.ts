@@ -1,8 +1,6 @@
-import { execFile } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { basename, join } from 'node:path'
-import { promisify } from 'node:util'
 import { NO_HOOKS, git, rev } from './git.ts'
 import { listRuns, startRun, type Run, type Tool } from './runs.ts'
 
@@ -32,11 +30,8 @@ export type Order = {
   report?: string
 }
 
-const exec = promisify(execFile)
-// No prompts, so a repo without a saved login fails at once instead of opening a sign-in window.
-const quiet = (repo: string, ...args: string[]) =>
-  exec('git', ['-c', 'core.fsmonitor=false', '-C', repo, ...args], { env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'never' }, timeout: 120_000 })
-const failure = (e: any) => String(e.stderr || e.message).trim()
+const ordersOn = (repo: string) => git(repo, 'config', '--get', 'omni.orders').then((v) => v === 'true', () => false)
+const failure =(e: any) => String(e.stderr || e.message).trim()
 
 const fetchErrors = new Map<string, string>()
 const lastFetch = new Map<string, number>()
@@ -46,7 +41,7 @@ const failed = new Map<string, string>()
 async function fetchOrders(repo: string) {
   lastFetch.set(repo, Date.now())
   try {
-    await quiet(repo, 'fetch', '--prune', 'origin', '+refs/heads/omni/orders/*:refs/remotes/origin/omni/orders/*', '+refs/heads/claude/*:refs/remotes/origin/claude/*')
+    await git(repo, 'fetch', '--prune', 'origin', '+refs/heads/omni/orders/*:refs/remotes/origin/omni/orders/*', '+refs/heads/claude/*:refs/remotes/origin/claude/*')
     fetchErrors.delete(repo)
   } catch (e) {
     fetchErrors.set(repo, failure(e))
@@ -84,7 +79,7 @@ export async function listOrders(repo: string, repos: string[]): Promise<Order[]
     if (full === null && state === 'open') (state = 'blocked'), (note = 'No order.md on this branch.')
     if (state === 'open' && ask) {
       const target = repos.find((r) => basename(r) === ask)
-      const on = target && (await git(target, 'config', '--get', 'omni.orders').catch(() => '')) === 'true'
+      const on = target && (await ordersOn(target))
       note = on ? failed.get(sha) : `Project ${ask} isn't under your roots or doesn't have orders on.`
       if (note) state = 'blocked'
       else if (to === 'Codex') note = "Codex questions wait for your click: Codex's read-only mode hasn't been checked on this PC, and it can read outside the project."
@@ -156,9 +151,9 @@ export async function runOrder(repo: string, branch: string, opts: { tool: strin
     if (order?.state === 'running') throw new Error('This order is already running.')
     if (order?.state !== 'open' || (opts.sha !== undefined && opts.sha !== order.sha)) throw new Error('This order changed. Check for orders again.')
     // A question runs in the other project's own checkout, and can only read there.
-    const question = order.ask ? { cwd: ctx.repos.find((r) => basename(r) === order.ask), readOnly: true } : {}
+    const cwd = order.ask ? ctx.repos.find((r) => basename(r) === order.ask) : undefined
     const task = framed(order)
-    return await startRun(repo, { tool: opts.tool, model: opts.model, task, branch, from: `refs/remotes/origin/${branch}`, order: { branch, ask: order.ask }, onEnd: report(order), ...question }, ctx.api, ctx.cmd)
+    return await startRun(repo, { tool: opts.tool, model: opts.model, task, branch, from: `refs/remotes/origin/${branch}`, order: { branch, ask: order.ask }, onEnd: report(order), cwd }, ctx.api, ctx.cmd)
   } finally {
     starting.delete(key)
   }
@@ -169,7 +164,7 @@ export async function sendOrder(repo: string, branch: string, repos: string[]) {
   const order = (await listOrders(repo, repos)).find((o) => o.branch === branch)
   if (order?.state !== 'ready') throw new Error('This order changed. Check for orders again.')
   try {
-    await quiet(repo, 'push', 'origin', `refs/heads/${branch}:refs/heads/${branch}`)
+    await git(repo, 'push', 'origin', `refs/heads/${branch}:refs/heads/${branch}`)
   } catch (e) {
     const message = failure(e)
     throw new Error(/rejected|non-fast-forward|fetch first/.test(message) ? 'The branch moved on GitHub since this PC worked on it. Check for orders again.' : message)
@@ -178,7 +173,7 @@ export async function sendOrder(repo: string, branch: string, repos: string[]) {
 }
 
 export async function checkOrders({ repos, api, now = false, cmd }: { repos: string[]; api: string; now?: boolean; cmd?: [string, string[]] }) {
-  const on = (await Promise.all(repos.map(async (r) => ((await git(r, 'config', '--get', 'omni.orders').catch(() => '')) === 'true' ? r : '')))).filter(Boolean)
+  const on = (await Promise.all(repos.map(async (r) => ((await ordersOn(r)) ? r : '')))).filter(Boolean)
   await Promise.all(on.filter((r) => now || Date.now() - (lastFetch.get(r) ?? 0) > FETCH_MS).map(fetchOrders))
   const orders = (await Promise.all(on.map((r) => listOrders(r, repos)))).flat()
   // Questions start without a click, one at a time, so they can't pile up on your usage.
