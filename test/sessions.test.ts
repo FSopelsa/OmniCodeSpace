@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
-import { allSessions, sessionsIn } from '../server/sessions.ts'
+import { allSessions, projectOf, sessionsIn } from '../server/sessions.ts'
 
 const home = mkdtempSync(join(tmpdir(), 'omni-home-'))
 after(() => rmSync(home, { recursive: true, force: true }))
@@ -35,6 +35,7 @@ test('reads both tools and survives odd lines', async () => {
       { type: 'session_meta', timestamp: '2026-11-02T09:00:00Z', payload: { id: 'codex-1', cwd: 'C:/Work/Other', git: { branch: 'main' } } },
       { type: 'turn_context', timestamp: '2026-11-02T09:00:01Z', payload: { model: 'gpt-test', cwd: 'C:/Work/Other' } },
       { type: 'event_msg', timestamp: '2026-11-02T09:01:00Z', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: 50, cached_input_tokens: 30, output_tokens: 7 } } } },
+      { type: 'turn_context', timestamp: '2026-11-02T09:30:00Z', payload: { model: 'gpt-test', effort: 'high', cwd: 'C:/Work/Other' } },
     ]),
   )
   writeFileSync(
@@ -53,11 +54,15 @@ test('reads both tools and survives odd lines', async () => {
   assert.equal(claudeSession.title, 'Auth work')
   assert.equal(claudeSession.branch, 'impl/auth')
   assert.equal(claudeSession.last, '2026-11-01T10:05:00Z')
+  assert.deepEqual(claudeSession.spans, [['2026-11-01T10:00:00Z', '2026-11-01T10:05:00Z']])
   // m1 appears twice in the log and only counts once.
   assert.deepEqual(claudeSession.tokens, { input: 30, cached: 200, output: 40 })
 
   assert.equal(codexSession.title, 'Review')
   assert.equal(codexSession.model, 'gpt-test')
+  assert.equal(codexSession.effort, 'high')
+  // A pause of over 15 minutes starts a new stretch of work.
+  assert.deepEqual(codexSession.spans, [['2026-11-02T09:00:00Z', '2026-11-02T09:01:00Z'], ['2026-11-02T09:30:00Z', '2026-11-02T09:30:00Z']])
   assert.deepEqual(codexSession.tokens, { input: 20, cached: 30, output: 7 })
 })
 
@@ -66,4 +71,12 @@ test('matches folders whatever the slash direction or case, and not by name pref
   assert.deepEqual(sessionsIn(sessions, ['c:/work/shop']).map((s) => s.id), ['agent-a1', 'claude-1'])
   assert.deepEqual(sessionsIn(sessions, ['C:\\Work\\Shop\\']).map((s) => s.id), ['agent-a1', 'claude-1'])
   assert.deepEqual(sessionsIn(sessions, ['C:/Work/Sho']), [])
+})
+
+test('names the project a session belonged to, including worktrees this app starts beside it', () => {
+  const repos = ['C:\\Work\\Shop', 'C:\\Work\\Shop-web']
+  assert.equal(projectOf('c:/work/shop/src', repos), 'Shop')
+  assert.equal(projectOf('C:\\Work\\Shop.worktrees\\add-login-3f2a', repos), 'Shop')
+  assert.equal(projectOf('C:\\Work\\Shop-web', repos), 'Shop-web')
+  assert.equal(projectOf('C:\\Elsewhere\\Tool', repos), 'Tool')
 })

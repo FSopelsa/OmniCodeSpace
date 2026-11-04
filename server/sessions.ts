@@ -7,11 +7,17 @@ import { createInterface } from 'node:readline'
 export type Session = {
   tool: 'Claude Code' | 'Codex'
   id: string
+  // One chat can log to two files, when its folder changes partway, so the file is what tells entries apart.
+  log: string
   title: string
   model: string
+  // Codex logs the reasoning effort with each turn. Claude Code doesn't log it.
+  effort: string
   cwd: string
   branch: string
   last: string
+  // Stretches of activity, split where the log pauses, for the Roster timetable.
+  spans: [string, string][]
   tokens: { input: number; cached: number; output: number }
   // The agent definition this run worked as, if any, and the session that started it, for a subagent.
   agent: string
@@ -29,14 +35,24 @@ async function eachLine(file: string, visit: (entry: any) => void) {
   }
 }
 
+// A pause longer than this ends one stretch of work. A chat resumed later in the day becomes a second bar, not one long one.
+const PAUSE_MS = 15 * 60 * 1000
+
+function track(s: Session, time: string) {
+  if (time > s.last) s.last = time
+  const span = s.spans.at(-1)
+  if (!span || Date.parse(time) - Date.parse(span[1]) > PAUSE_MS) s.spans.push([time, time])
+  else if (time > span[1]) span[1] = time
+}
+
 export async function readClaude(file: string): Promise<Session> {
-  const s: Session = { tool: 'Claude Code', id: '', title: '', model: '', cwd: '', branch: '', last: '', tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '' }
+  const s: Session = { tool: 'Claude Code', id: '', log: file, title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '' }
   const counted = new Set<string>()
   await eachLine(file, (e) => {
     s.id ||= e.sessionId ?? ''
     // Written when a session starts with --agent.
     if (e.type === 'agent-setting' && e.agentSetting) s.agent = e.agentSetting
-    if (e.timestamp && e.timestamp > s.last) s.last = e.timestamp
+    if (e.timestamp) track(s, e.timestamp)
     if (e.cwd) s.cwd = e.cwd
     if (e.gitBranch) s.branch = e.gitBranch
     if (e.type === 'custom-title' && e.customTitle) s.title = e.customTitle
@@ -62,9 +78,9 @@ async function readClaudeSubagent(file: string): Promise<Session> {
 }
 
 export async function readCodex(file: string, titles: Map<string, string> = new Map()): Promise<Session> {
-  const s: Session = { tool: 'Codex', id: '', title: '', model: '', cwd: '', branch: '', last: '', tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '' }
+  const s: Session = { tool: 'Codex', id: '', log: file, title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '' }
   await eachLine(file, (e) => {
-    if (e.timestamp && e.timestamp > s.last) s.last = e.timestamp
+    if (e.timestamp) track(s, e.timestamp)
     const p = e.payload
     if (e.type === 'session_meta') {
       s.id = p.id ?? ''
@@ -77,6 +93,7 @@ export async function readCodex(file: string, titles: Map<string, string> = new 
     }
     if (e.type === 'turn_context') {
       if (p.model) s.model = p.model
+      if (p.effort) s.effort = p.effort
       if (p.cwd) s.cwd = p.cwd
     }
     if (e.type === 'event_msg' && p?.type === 'token_count' && p.info?.total_token_usage) {
@@ -127,6 +144,16 @@ export async function allSessions(home = homedir()) {
 }
 
 export const normal = (p: string) => p.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+
+// Worktrees this app starts sit beside the repo in <repo>.worktrees, so their runs count for that repo.
+export function projectOf(cwd: string, repos: string[]) {
+  const dir = normal(cwd)
+  const repo = repos.find((r) => {
+    const root = normal(r)
+    return dir === root || dir.startsWith(`${root}/`) || dir.startsWith(`${root}.worktrees/`)
+  })
+  return basename(repo ?? cwd)
+}
 
 export function sessionsIn(sessions: Session[], folders: string[]) {
   const roots = folders.map(normal)

@@ -19,7 +19,9 @@ function call(url: string, headers: Record<string, string> = { host: '127.0.0.1:
       writeHead: (code: number) => { status = code },
       end: (text: string) => resolve({ status, body: JSON.parse(text) }),
     }
-    api({ url, headers, method } as unknown as IncomingMessage, res as unknown as ServerResponse)
+    // An empty body, read the way a real request is.
+    const body = async function* () {}
+    api({ url, headers, method, [Symbol.asyncIterator]: body } as unknown as IncomingMessage, res as unknown as ServerResponse)
   })
 }
 
@@ -29,8 +31,9 @@ test('refuses requests that did not come from this PC', async () => {
   assert.equal((await call('/repos', { host: '127.0.0.1:5173', origin: 'https://evil.example' })).status, 403)
 })
 
-test('is read-only', async () => {
-  assert.equal((await call('/repos', undefined, 'POST')).status, 405)
+test('writes need the page token, and other methods are refused', async () => {
+  assert.equal((await call('/runs', undefined, 'POST')).status, 403)
+  assert.equal((await call('/repos', undefined, 'PUT')).status, 405)
 })
 
 test('only opens folders found under the roots', async () => {

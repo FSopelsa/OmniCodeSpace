@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Commit, Worktree } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
 import type { AgentDef, Named, Setup } from '../server/setup.ts'
+import { MapView } from './Map.tsx'
+import { Roster } from './Roster.tsx'
+import { StartDialog } from './Runs.tsx'
 import { Tracks } from './Tracks.tsx'
+import { AgentInfo, Names, agentRows } from './parts.tsx'
+import { Lamp, ago, button, count, isLive, modelName, sessionName, useJson } from './ui.tsx'
 
 type Summary = { name: string; path: string; branch: string; last: string; changed: number }
 type Detail = Summary & {
@@ -13,44 +18,6 @@ type Detail = Summary & {
   instructions: string[]
 }
 type Brief = { agent: string; seen: string; head: string; commits: number; files: number; briefTokens: number; projectTokens: number; text: string }
-
-function useJson<T>(url: string | null, every = 0) {
-  const [state, setState] = useState<{ url?: string; data?: T; error?: string }>({})
-  useEffect(() => {
-    if (!url) return
-    let alive = true
-    const load = () =>
-      fetch(url)
-        .then(async (r) => {
-          const body = await r.json()
-          if (alive) setState(r.ok ? { url, data: body } : { url, error: body.error })
-        })
-        .catch(() => alive && setState({ url, error: 'The local server is not responding. Start it with npm run dev.' }))
-    load()
-    const timer = every ? setInterval(load, every) : undefined
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
-  }, [url, every])
-  return state.url === url ? state : {}
-}
-
-const words = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-function ago(date: string) {
-  if (!date) return ''
-  const minutes = Math.round((Date.parse(date) - Date.now()) / 60000)
-  if (minutes > -60) return words.format(minutes, 'minute')
-  if (minutes > -1440) return words.format(Math.round(minutes / 60), 'hour')
-  return words.format(Math.round(minutes / 1440), 'day')
-}
-const count = (n: number) => n.toLocaleString('en')
-const isLive = (s: Session) => Date.now() - Date.parse(s.last) < 10 * 60 * 1000
-const sessionName = (s: Session) => s.title || `Session ${s.id.slice(0, 8)}`
-
-function Lamp({ on }: { on: boolean }) {
-  return <i className={`inline-block size-3 flex-none rounded-full border-2 border-ink ${on ? 'bg-run' : 'bg-sheet'}`} />
-}
 
 function CatchUp({ repo }: { repo: Detail }) {
   const [typed, setTyped] = useState('')
@@ -98,35 +65,16 @@ function CatchUp({ repo }: { repo: Detail }) {
   )
 }
 
-function RunList({ runs }: { runs: Session[] }) {
-  return (
-    <ul className="mt-1 text-sm text-ink-2">
-      {runs.slice(0, 8).map((r) => (
-        <li key={r.id} className="py-0.5">
-          <span className="font-semibold text-ink">{sessionName(r)}</span>, {ago(r.last)}, {r.model || 'model not recorded'}, {count(r.tokens.input + r.tokens.output)} new tokens
-        </li>
-      ))}
-      {runs.length > 8 && <li>and {runs.length - 8} older runs</li>}
-    </ul>
-  )
-}
-
 function Agents({ defs, runs }: { defs: AgentDef[]; runs: Session[] }) {
   const [open, setOpen] = useState('')
-  const known = new Set(defs.map((d) => d.name))
-  // Built-in agents have no file to read, but their runs still belong under a name.
-  const builtIn = [...new Set(runs.map((r) => r.agent).filter((a) => a && !known.has(a)))]
-  const rows = [...defs.map((def) => ({ name: def.name, key: `${def.tool}:${def.name}`, def })), ...builtIn.map((name) => ({ name, key: `run:${name}`, def: undefined }))]
-  const runsOf = (name: string, def?: AgentDef) => runs.filter((r) => r.agent === name && (!def || r.tool === def.tool))
+  const rows = agentRows(defs, runs)
 
   return (
     <>
       <h2 className="mt-6 font-extrabold">Agents</h2>
       {rows.length === 0 && <p className="mt-1 text-ink-2">No agent definitions for this project, and no agent has run here.</p>}
       <ul className="mt-1">
-        {rows.map(({ name, key, def }) => {
-          const mine = runsOf(name, def)
-          return (
+        {rows.map(({ name, key, def, runs: mine }) => (
             <li key={key} className="border-t border-rule">
               <button onClick={() => setOpen(open === key ? '' : key)} aria-expanded={open === key} className="flex w-full items-baseline gap-2 py-2 text-left">
                 <Lamp on={mine.some(isLive)} />
@@ -139,39 +87,13 @@ function Agents({ defs, runs }: { defs: AgentDef[]; runs: Session[] }) {
               </button>
               {open === key && (
                 <div className="pb-3 pl-5 text-sm">
-                  {def?.description && <p className="text-ink-2">{def.description}</p>}
-                  {def && (
-                    <dl className="mt-1 text-ink-2">
-                      <dd>Model: {def.model || "the session's"}</dd>
-                      {def.tool === 'Codex' ? <dd>Sandbox: {def.sandbox || "the session's"}</dd> : <dd className="break-words">Can use: {def.tools.length ? def.tools.join(', ') : 'every tool the session has'}</dd>}
-                      <dd className="break-all">File: {def.file}</dd>
-                    </dl>
-                  )}
-                  {def?.instructions && (
-                    <details className="mt-1">
-                      <summary className="cursor-pointer font-semibold">Instructions</summary>
-                      <pre className="mt-1 max-h-60 overflow-auto border border-rule p-2 font-mono text-[12px] whitespace-pre-wrap">{def.instructions}</pre>
-                    </details>
-                  )}
-                  <h3 className="mt-2 font-semibold">Runs here</h3>
-                  {mine.length ? <RunList runs={mine} /> : <p className="text-ink-2">None on this PC yet.</p>}
+                  <AgentInfo def={def} runs={mine} />
                 </div>
               )}
             </li>
-          )
-        })}
+        ))}
       </ul>
     </>
-  )
-}
-
-function Names({ items, label }: { items: Named[]; label: string }) {
-  if (!items.length) return <p className="text-ink-2">No {label}.</p>
-  return (
-    <details>
-      <summary className="cursor-pointer">{items.length} {label}</summary>
-      <ul className="text-ink-2">{items.map((i) => <li key={`${i.from}:${i.name}`} className="break-all">{i.name} <span className="text-[12px]">({i.from})</span></li>)}</ul>
-    </details>
   )
 }
 
@@ -237,17 +159,17 @@ function Inspector({ repo, commit }: { repo: Detail; commit?: Commit }) {
       {sessions.length === 0 && <p className="mt-1 text-ink-2">No Claude Code or Codex session has run in this project on this PC yet.</p>}
       <ul className="mt-1">
         {sessions.slice(0, 12).map((s) => (
-          <li key={s.id} className="border-t border-rule">
-            <button onClick={() => setOpenId(openId === s.id ? '' : s.id)} aria-expanded={openId === s.id} className="flex w-full items-baseline gap-2 py-2 text-left">
+          <li key={s.log} className="border-t border-rule">
+            <button onClick={() => setOpenId(openId === s.log ? '' : s.log)} aria-expanded={openId === s.log} className="flex w-full items-baseline gap-2 py-2 text-left">
               <Lamp on={isLive(s)} />
               <span className="min-w-0">
                 <span className="block truncate font-semibold">{sessionName(s)}</span>
                 <span className="block text-sm text-ink-2">{s.tool}{s.agent && ` as ${s.agent}`}, {ago(s.last)}</span>
               </span>
             </button>
-            {openId === s.id && (
+            {openId === s.log && (
               <dl className="pb-3 pl-5 text-sm text-ink-2">
-                <dd>Model: {s.model || 'not recorded'}</dd>
+                <dd>Model: {modelName(s) || 'not recorded'}</dd>
                 <dd>Branch: {s.branch || 'not recorded'}</dd>
                 <dd className="break-all">Folder: {s.cwd}</dd>
                 <dd>Tokens: {count(s.tokens.input)} in, {count(s.tokens.cached)} from cache, {count(s.tokens.output)} out</dd>
@@ -317,9 +239,14 @@ function RepoView({ path }: { path: string }) {
   )
 }
 
+const VIEWS = { tracks: 'Tracks', roster: 'Roster', map: 'Map' } as const
+
 export function App() {
   const { data, error } = useJson<{ roots: string[]; repos: Summary[] }>('/api/repos', 30000)
   const [path, setPath] = useState<string>()
+  const [view, setView] = useState<keyof typeof VIEWS>('tracks')
+  const [run, setRun] = useState<string>()
+  const [starting, setStarting] = useState(false)
   const repos = [...(data?.repos ?? [])].sort((a, b) => b.last.localeCompare(a.last))
   const current = path ?? repos[0]?.path
 
@@ -327,8 +254,28 @@ export function App() {
     <div className="grid min-h-screen grid-rows-[52px_1fr] lg:h-screen">
       <header className="flex items-center gap-4 border-b border-rule px-5">
         <b className="text-lg font-extrabold tracking-tight">OmniCodeSpace</b>
-        <span className="text-ink-2">Read-only view of this PC</span>
+        <nav aria-label="Views" className="flex gap-1">
+          {Object.entries(VIEWS).map(([key, label]) => (
+            <button key={key} onClick={() => setView(key as keyof typeof VIEWS)} aria-current={view === key ? 'page' : undefined} className={`rounded-sm px-3 py-1 font-semibold ${view === key ? 'bg-ink text-sheet' : ''}`}>
+              {label}
+            </button>
+          ))}
+        </nav>
+        <button onClick={() => setStarting(true)} disabled={!repos.length} className={`${button} ml-auto`}>Start an agent</button>
       </header>
+      {starting && (
+        <StartDialog
+          repos={repos}
+          current={current}
+          onClose={() => setStarting(false)}
+          onStarted={(started) => {
+            setStarting(false)
+            setRun(started.id)
+            setView('roster')
+          }}
+        />
+      )}
+      {view === 'roster' ? <Roster selected={run} onSelect={setRun} /> : (
       <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[220px_1fr]">
         <nav aria-label="Projects" className="border-b border-rule p-4 lg:overflow-y-auto lg:border-r lg:border-b-0">
           <h2 className="font-extrabold">This PC</h2>
@@ -348,8 +295,9 @@ export function App() {
             ))}
           </ul>
         </nav>
-        {current ? <RepoView key={current} path={current} /> : <div />}
+        {!current ? <div /> : view === 'map' ? <MapView key={current} path={current} /> : <RepoView key={current} path={current} />}
       </div>
+      )}
     </div>
   )
 }

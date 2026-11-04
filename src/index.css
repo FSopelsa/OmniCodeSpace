@@ -9,6 +9,12 @@
   --color-ink-2: #4e5e56;
   --color-rule: #bcc7bd;
   --color-run: #1f8a55;
+  --color-wait: #e0a100;
+  --color-stop: #cc3322;
+  --color-a1: #2346c4;
+  --color-a2: #8a2a7e;
+  --color-a3: #0e7c86;
+  --color-a4: #6f6410;
   --color-since: rgb(224 161 0 / 0.2);
   --font-sans: "Overpass Variable", system-ui, sans-serif;
   --font-mono: "Overpass Mono", monospace;

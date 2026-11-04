@@ -108,24 +108,28 @@ Best for your main question: what's happening in this repo, and what's new since
 
 ![Prototype B](prototypes/b-roster.png)
 
-Best for "what are they all doing, and what's scheduled?". I'd add this as a second tab at step 6.
+Best for "what are they all doing, and what's scheduled?". Built at step 6 as the second tab. Agents started from the app appear here too, with their live output.
 
 ### C. Map: the whole workspace
 
 ![Prototype C](prototypes/c-map.png)
 
-Best for explaining the system and following an order across machines. It shows git as the thing joining everything. It looks great but gets crowded with many projects, so build it last, if at all.
+Best for explaining the system and following an order across machines. It shows git as the thing joining everything.
+
+**Built as the third tab, one project at a time**, after your sketch below. The project is the hub. Around it are three places: this PC, with its worktrees, Claude Code, Codex and local models; the cloud, reached through the project's remotes; and other machines. Agents hang off the tool that runs them, and select any node for its details: models used here (with Codex's effort), agents, plugins, MCP servers, skills, instruction files and what the project is built with. Local models and other machines are dimmed placeholders until steps 10 and 14. Showing one project keeps it readable, so the whole-workspace version waits until orders (step 11) give it something to follow.
+
+![Your sketch for the map](prototypes/c-map_GUI-sketch.jpg)
 
 ## Architecture
 
 ```text
  Browser UI (React)
-      |  read-only HTTP on 127.0.0.1
+      |  HTTP on 127.0.0.1, writes need a token made per launch
  Local server (Node)
       |-- git CLI ............ repos, branches, worktrees, refs/omni/*
       |-- tool logs .......... ~/.claude/projects, ~/.codex/sessions
       |-- instruction files .. AGENTS.md, .claude/agents, .mcp.json
-      '-- (later) agent runners, in worktrees, with approval
+      '-- agent runs ........ claude -p / codex exec in worktrees, push gate
 
  Other machines and cloud sessions connect only through the git remote.
 ```
@@ -151,7 +155,7 @@ There's no database and no service of our own. Git and the tools' logs are the s
 
 Each step ends in something you can check. Stop whenever it's useful enough.
 
-### Done (uncommitted)
+### Done
 
 **Step 0: read-only view and catch-up.** Works on your real repos.
 
@@ -192,7 +196,21 @@ Each clone had a stand-in remote, so it looked up to date. Every session got the
 - **The real difference is correctness.** Without the brief, an agent has no way to know where it left off. Most reported "nothing new" while describing the very commits it was asked about. With the brief, every run named the right range.
 - **Depth didn't change.** In JPA, an unmentioned starter swap in "Fixed some warnings" was the best finding. It was caught in 1 run with the brief and 2 without. Cost with the brief also varied less ($0.07–0.08 against $0.05–0.12 on Poklone).
 
-**Verdict against the rule set in advance.** By cost, the brief saves under 30%, so it fails. The work didn't get worse, though: the "what's new" part went from wrong or unknown to right. **Decided: keep the brief**, as a correctness feature, and don't claim it saves tokens.
+**Verdict against the cost bar (1%, see below).** By cost, the brief is +9% in JPA and −6% in Poklone, both inside the run-to-run spread, so it doesn't clearly pass. The work didn't get worse, though: the "what's new" part went from wrong or unknown to right. **Decided: keep the brief**, as a correctness feature, and don't claim it saves tokens yet.
+
+**The cost bar: 1%.** A brief or format counts as cheaper when its median cost per run, at list price, is at least 1% below going without, on the same clones and prompt. The bar was 30% at first and was lowered to 1% on 2026-11-03, because at this stage all data is valuable to us: the research runs alongside building Omni, and even small savings on small repos, with nothing tuned yet, show which way to go. A result inside the run-to-run spread is still reported as such.
+
+Historical stats, from when the bar was briefly 5%:
+
+| Test | Result |
+|---|---|
+| Haiku | Passes in both repos (−14% to −17%) |
+| Sonnet, step 2 | Fails: +9% in JPA, −6% in Poklone |
+| Pointer + extracts | −7% in JPA, −3% in Poklone |
+
+The Sonnet and pointer + extracts differences are all inside the run-to-run spread, so none of them clearly passes.
+
+**Use this format for new tests.** Once the 1% bar has been made known after the rebuild, report each new test against it as a table like the one above (test, result per repo), followed by one line on which results sit inside the run-to-run spread.
 
 **Limits of this test:**
 
@@ -225,7 +243,7 @@ Each clone had a stand-in remote, so it looked up to date. Every session got the
 | Cost per run, cache expired (estimate) | $0.062 | about $0.23, 3.7× | $0.094 | about $0.27, 2.8× |
 | Knew what was new (of 5) | 5 | 5 | 5 | 5 |
 
-- **Haiku:** the brief halved turns in JPA and saved 14–17% of cost, still under the 30% bar. Without it, Haiku guessed the starting point at best.
+- **Haiku:** the brief halved turns in JPA and saved 14–17% of cost, which clears the 1% bar. Without it, Haiku guessed the starting point at best.
 - **Codex runs the catch-up reliably.** It ran the command by itself in all 20 runs, because of the `AGENTS.md` note. It never established the range without the brief. With the brief, it ran fewer commands but read more full-price text, mostly diffs inside the range it now knew. So for Codex the brief costs more, and buys correctness.
 - **Resume against fresh:** with a warm cache, they cost the same and were equally right. Claude Code flagged no expired cache in any of the 10 resumes, because each came within minutes of the old chat. Once the cache expires, after an hour at most, rewriting even this small 42k-token history makes resuming about 3× dearer than a fresh chat with the brief. Long real chats would cost more still. **So start fresh after a break, and resume only within the hour.** The hook now says so at the right moment. When Claude Code reports `prompt_cache_likely_expired` on resume, the hook shows you a message with Claude Code's cost estimate and suggests a new chat. The model still gets the brief. A run with the flag faked showed the brief reaching the model and the message leaving the hook. How the message looks in the interactive app is unchecked, because a real expiry takes up to an hour.
 
@@ -246,38 +264,66 @@ Limits of step 2b:
 
 ### Ongoing: briefs that also save tokens
 
-Step 2 showed where the cost really sits. The brief itself is small. What costs is the diffs an agent opens afterwards anyway, and those are read at full price. So a cheaper brief has to answer more of what the agent would otherwise go and read. Ideas to try, none tested:
+Step 2 showed where the cost really sits. The brief itself is small. What costs is the diffs an agent opens afterwards anyway, and those are read at full price. So the aim here is an agent that is ready to code with as few full-price reads as possible. What changed since is already in git, so the brief should carry only what git can't say or an agent would miss. *Read* below means I opened the source. *Claim* means a figure from a project's own page or a search summary.
 
-- **Say why per file, not just per commit.** One line per changed file on what changed and why, so the agent opens fewer diffs. Trailers from step 3 feed this.
-- **Let a cheap model write the summary.** For example, Haiku summarises the diffs once at commit or arrival time, so expensive models read the summary instead.
-- **A handover note from the agent that leaves.** A `Stop` hook asks the agent to write a three-line note into the commit or a ref. That costs it a little and saves the next agent more.
-- **Brief only when it pays.** On resume with a warm cache, the old chat already knows the history. Use `prompt_cache_likely_expired` to decide.
-- **Fit the brief to the task.** When the first prompt names files or areas, put those first and leave the rest as one line.
-- **Learn from the logs.** Record each brief's size and the reads that follow it in the session log. Compare brief formats and prompt styles over time, and keep what leads to fewer full-price reads.
+**What the evidence says**
 
-**Keep searching for prior art**, and look again every few steps. Places to search:
+- **No confirmed saving anywhere.** I found no test of a git catch-up brief or a handoff skill that shows lower cost. The one handoff measurement is tiny and mixed. [claudetto](https://github.com/xsyetopz/claudetto/wiki/Handoff-Cost) (*read*; 2 runs per arm, Sonnet) had the handoff step cost $0.0067 against $0.0163 for `/compact`, but with the next turn counted it was $0.061 against $0.046, because both follow-ups re-read work the note called done.
+- **Orientation context buys little.** The study cited near the top found no general gain and +20% cost, and a 288-run ablation found no measurable change in correctness (*read:* the [abstract of arXiv 2607.27250](https://arxiv.org/abs/2607.27250), not the paper). Claude Code's docs say to keep what the code can't tell you (pitfalls, rationale, non-default conventions) and cut layouts, dependency lists and architecture overviews (*read:* [memory docs](https://code.claude.com/docs/en/memory)).
+- **Anthropic's own pattern for fresh sessions is a progress note plus git.** In [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) (*read*), each session commits with descriptive messages and writes a summary into a progress file, and the next one starts from that file and the git log instead of guessing. No token figures.
+- **Stars didn't track evidence.** JetBrains measured Caveman (117k stars) at 8.5% fewer output tokens against 65% advertised, and rtk (85k) at 7.6% *higher* cost at low effort and no change at high ([Caveman](https://blog.jetbrains.com/ai/2026/07/speak-to-ai-agents-like-cavemen-tosave-tokens/), [rtk](https://blog.jetbrains.com/ai/2026/07/rtk-claude-code-token-); *read*; their own harness, Sonnet 5, SkillsBench).
 
-- GitHub repos and published workflows.
-- Claude Code and Codex plugins and skills. Use `/anthropic-skills:find-skills` and the plugin catalog.
-- MCP servers.
+**Experiments, best-backed first.** Step 2's clones, prompt and 1% cost bar, Sonnet, 5 runs per arm in each repo with the arms rotating, plus the tokens of every diff read after the brief.
 
-Wording to try: agent handoff, session handover, context catch-up, onboarding an agent to a repo, codebase digest, repo map, memory bank, change summary, "what changed since", diff summarisation, context compression, context engineering.
+| # | Experiment | Why this one |
+|---|---|---|
+| 1 | **Handover note** added to the brief: a hand-written best note (the upper bound), mattpocock's `handoff` skill, and a custom skill if those two show what to change | Anthropic's progress-note pattern. Claude Code issue [#11455](https://github.com/anthropics/claude-code/issues/11455) asks for it (27 👍, open). mattpocock/skills has 311k stars. claudetto's n=2 is the only measurement, and it is mixed |
+| 2 | **Range pointer + extracts:** the brief cut to the named range, the changed lines of dependency files, and `Why:`, `Gotcha:`, `Next:` trailers | Dependency files change in 10–24% of commits in your repos (below). Step 2's starter swap was caught in 1 run with the brief and 2 without. git-prism (5 stars) also puts dependency changes first |
+| 3 | **Code index on or off**, outside the brief | CodeGraph (76k stars) and Serena (31k). Claude Code's docs say symbol navigation cuts file reads, but the savings figures are the projects' own. **Not run:** needs a tool installed |
+| later | A cheap model writes the summary, fit the brief to the task, learn from the session logs | Weakest backing, no independent saving found. "Brief only when it pays" is built, see step 2b |
 
-#### Prior art, round 1 (3 Nov 2026, redone for "ready to code, cheaply")
+#### Results (3 Nov 2026)
 
-The goal here is an agent that can start coding as soon and as cheaply as possible. "What changed since" matters less, because git already keeps it. So I looked for three things: the cheapest context that gets an agent going, whether handoff skills save tokens, and whether any commit history is worth putting in the brief. *Read* means I opened the source myself. *Claim* means a number or statement from a project's own page or a search summary, which I didn't check.
+**Experiments 1 and 2, measured.** A handover note didn't pay in this test, while pointer + extracts did what the current brief does at no extra cost and found more. Nothing clearly clears the 1% bar, since every difference sits inside the run-to-run spread.
 
-**Result**
+**Setup.** Step 2's two clones, prompt and last-seen commits, with step 2b's flags (Sonnet 5.5, `claude -p`, read-only tools, user settings off, so no rtk or Headroom). 5 runs per arm in each repo, 50 in all, with the arm order rotating each round. A hook printed a fixed text per arm: nothing; today's brief from `catchup`; the brief plus a handover note; or the pointer text. Two notes were made for the state at the last visit. I wrote one by hand from that commit's history and files (the upper bound, and it knows what came later). The other is mattpocock's `handoff` skill, run after a read-only session in a clone that can't see later commits. Diff tokens are the size of what `git show`, `git diff` and `git log -p` returned, at 4 characters a token.
 
-- **No confirmed saving anywhere.** I found no test showing that a git catch-up brief or a handoff skill saves tokens. The one handoff measurement is tiny and mixed (below).
-- **Orientation context doesn't buy much.** Beyond the study cited above, a later ablation of 288 runs on Claude Code and Codex found that context files didn't measurably change correctness, and that agents fail on implementation skill, not on missing repo knowledge (*read:* the [abstract of arXiv 2607.27250](https://arxiv.org/abs/2607.27250), not the paper). Claude Code's docs say to keep what an agent can't derive from the code (pitfalls, rationale, conventions that differ from defaults) and to cut directory layouts, dependency lists and architecture overviews (*read:* [memory docs](https://code.claude.com/docs/en/memory)).
-- **In your repos, only dependency-file changes are worth pulling from history.** Counts below.
+| Median of 5 runs | Without brief | Brief | Brief + hand note | Brief + `handoff` note | Pointer + extracts |
+|---|---|---|---|---|---|
+| **JPA:** cost per run at list price | $0.067 | $0.068 (+2%) | $0.062 (−6%) | $0.073 (+9%) | $0.062 (−7%) |
+| JPA: all tokens processed | 111,500 | 79,676 (−29%) | 78,695 (−29%) | 81,145 (−27%) | 115,365 (+3%) |
+| JPA: uncached tokens | 10,434 | 12,839 (+23%) | 11,479 (+10%) | 13,261 (+27%) | 10,548 (+1%) |
+| JPA: turns | 3 | 3 | 3 | 3 | 4 |
+| JPA: diff tokens read | 0 | 1,080 | 1,277 | 2,302 | 847 |
+| JPA: cost range | $0.051–0.070 | $0.055–0.193 | $0.053–0.074 | $0.061–0.085 | $0.049–0.071 |
+| **JPA: knew what was new (of 5)** | **0** (2 said nothing new, 3 guessed a start and said so) | **5** | **5** | **5** | **5** |
+| JPA: mentioned the starter swap in `pom.xml` (of 5) | 2 | 1 | 0 | 0 | **5** |
+| **Poklone:** cost per run at list price | $0.082 | $0.086 (+5%) | $0.092 (+12%) | $0.090 (+10%) | $0.080 (−3%) |
+| Poklone: all tokens processed | 153,617 | 122,663 (−20%) | 135,738 (−12%) | 128,586 (−16%) | 158,655 (+3%) |
+| Poklone: uncached tokens | 14,246 | 16,471 (+16%) | 17,131 (+20%) | 18,101 (+27%) | 14,548 (+2%) |
+| Poklone: turns | 4 | 4 | 5 | 4 | 4 |
+| Poklone: diff tokens read | 2,001 | 3,420 | 2,872 | 1,918 | 1,945 |
+| Poklone: cost range | $0.072–0.097 | $0.075–0.095 | $0.080–0.112 | $0.089–0.110 | $0.071–0.086 |
+| **Poklone: knew what was new (of 5)** | **0** (all 5 said they had no record, then took the latest 5 commits, right by luck) | **5** | **5** | **5** | **5** |
+| Poklone: mentioned `pom.xml` changes (of 5) | 2 | 1 | 3 | 2 | **5** |
+| Text added at session start (tokens) | 0 | 715 JPA, 944 Poklone | +about 280 | +725 JPA, +910 Poklone | 402 JPA, 378 Poklone |
 
-**Do handoff skills save tokens?** Not shown.
+- **Against the 1% bar:** pointer + extracts is 7% cheaper in JPA and 3% in Poklone, and the hand-written note 6% cheaper in JPA only. All of these sit well inside the run-to-run spread, so none clearly passes. Total tokens fall 12–29% with the brief or a note, as in step 2, but uncached tokens rise 10–27%, and pointer + extracts leaves both about level.
+- **Notes didn't help.** The hand-written note, the upper bound, cost the same as the brief or more (−6% JPA, +12% Poklone against no brief). Neither note made answers more right than the brief alone (5 of 5 either way), and neither surfaced the starter swap (0 of 5 in JPA). The skill's note also cost to write ($0.056 JPA, $0.085 Poklone, Sonnet, write step only) and ran 725–910 tokens, against about 280 for the hand-written one. In JPA it came with more diff reading (2,302 tokens against 1,080), which I can't explain from this data. Since the upper bound doesn't beat the brief, I didn't build a custom skill.
+- **Pointer + extracts found more at the same cost.** Its text is about 400 tokens, against 715–944 for the brief. All 10 runs named the right range. In JPA, 5 of 5 mentioned the starter change in `pom.xml` (4 saw it flip from `web` to `webmvc` and back), which was step 2's best finding. The brief had it in 1 of 5 and no brief in 2 of 5. In Poklone, 5 of 5 mentioned the `pom.xml` and build-file changes, against 1–3. The agents ran `git log` themselves, which is the one more turn in JPA. The cost difference against the brief (7–9% cheaper) is inside the spread, so I can't claim it.
+- **The one expensive run** was the first JPA brief run ($0.193, twice the uncached tokens of the rest). It looks like a cold cache, and I kept it in.
+- **Suggested next step:** try the pointer format as the brief on a third repo and on a task that asks for coding, not a handover, before replacing the current brief. I haven't touched `server/git.ts`.
 
-- *Read:* the only measurement I found, [claudetto's Handoff Cost page](https://github.com/xsyetopz/claudetto/wiki/Handoff-Cost) (Claude Code 2.1.303, Sonnet, 2 runs per arm, one toy project). Writing the handoff cost $0.0067 against $0.0163 for built-in `/compact`, and left about 500 tokens of context against 1,580. With the next turn counted, though, the handoff arm cost $0.061 against $0.046, because both handoff follow-ups re-read work that the note said was done. An older revision of that page, seen only in a search summary, showed handoff far cheaper ($0.063 against $0.229). I couldn't confirm it.
-- **Where one should pay (my reasoning, not measured):** it lets you start a fresh chat after a break instead of resuming. Step 2b found fresh plus the brief about 3× cheaper than resuming once the cache has expired, and a note would carry what git can't: intent, decisions, the next step.
-- *Read:* the `handoff` skills from [mattpocock](https://github.com/mattpocock/skills) (MIT; 1.1M installs is a claim from `npx skills find`) and [TheFlow0360](https://github.com/TheFlow0360/claude-handoff) (MIT, 0 stars). Neither publishes a token measurement. Worth taking: a note holds decisions and why, gotchas, open items and how to verify. It points to commits and diffs instead of repeating them, says what was checked so the next agent needn't redo it, and warns when `HEAD` moved after it was written. The community handoff plugins in the plugin catalog are the same idea (descriptions only, none read).
+**Limits of these runs:**
+
+- One model, one prompt, 5 runs per cell, two repos. Both repos were run at the same time, the arms in each rotating.
+- The prompt asks what changed since the last session. A note written before the new commits can't answer that, and its real job, carrying intent and the next step for continuing unfinished work, isn't exercised. So this does **not** show that notes are useless for coding. It shows they don't make a catch-up cheaper.
+- The notes were added to the brief, not used alone. The hand-written one is the best case and I knew what came later. The skill's note also carried your `CLAUDE.md` preferences and a list of first steps to re-verify, which a purpose-built note would leave out.
+- I counted "knew what was new" by whether the answer named the last-seen commit and whether it hedged, not by the step 2 rubric, and I did not hide the arms. Errors and risks weren't scored.
+- Experiment 3 (code index) wasn't run. It needs a tool installed, and I was told not to install anything globally.
+- List-price cost of the 50 runs was $3.94, plus $0.58 for writing the notes (two Sonnet sessions and a Haiku test of the skill), $4.52 in all. About $0.48 of the $5 is left.
+
+#### Prior art, ranked by standing (3 Nov 2026)
 
 **Which commit history is worth extracting?** My `git log` counts for the three of your repos with 15 or more commits. They are small repos.
 
@@ -287,49 +333,33 @@ The goal here is an agent that can start coding as soon and as cheaply as possib
 | Project-test-1 | 17 | 2 | 0 | 0 | 2 | 0 |
 | Workshop E-commerce Platform JPA | 40 | 10 | 0 | 0 | 4 | 0 |
 
-- **Extract the changed lines of dependency files** (`pom.xml`, `package.json` and similar). They turn up in 10–24% of commits here. Step 2's best finding was a starter swap hidden in "Fixed some warnings", and it was caught in 1 run with the brief and 2 without, so the brief as built doesn't surface it.
-- **Extract trailers.** `Why:` is already parsed. `Gotcha:` and `Next:` would be new lines in the `AGENTS.md` rule from step 3, so the next agent gets part of what a handoff note carries, with no new hook or file.
-- **Don't build yet:** reverts and renames (none occurred), co-change coupling (code-maat's defaults need 5 shared revisions per file pair, per a reimplementation's docs, which 17–40 commits rarely reach), and anything an LLM writes.
+Only dependency-file changes recur, so experiment 2 extracts those lines, plus trailers (`Why:` is parsed already, `Gotcha:` and `Next:` would be new lines in step 3's `AGENTS.md` rule). Reverts and renames never occurred, so I haven't built for them. Co-change coupling needs about 5 shared revisions per file pair in code-maat's defaults (a reimplementation's docs), which 17–40 commits rarely reach.
 
-**Shortlist to test with step 2's setup**, best first. Same clones, prompt and 30% rule as step 2, plus the tokens of every diff read after the brief.
+**The leads, ranked by what backs them beyond stars** (GitHub API on 3 Nov, *read*). Reception comes from search results unless marked *read*. I found no named expert recommending any of these except Anthropic's own pattern above, and no Hacker News thread I could open.
 
-1. **Brief = range pointer + extracts.** Cut it to the named range (`abc1234..def5678`, how many commits), the changed lines of dependency files, and any `Why:`, `Gotcha:` and `Next:` trailers. Agents run `git log` themselves if they want the list. Keep the named range, since it is what made agents right in step 2. The brief is already 1–7% of a project, so any saving has to come from fewer diff reads, and the extracts are the only part that could cause that.
-2. **Handover note, upper bound first.** In the test clones, write the best note by hand (decisions and why, gotchas, open items, what was checked, nothing the commits already say) and see whether reads fall. Also measure what writing it costs and whether the next agent still re-reads finished work, which it did in 2 of 2 in claudetto's test. Build the `Stop` hook only if reads fall.
-3. **Code index on or off (outside the brief).** Claude Code's docs say code-intelligence plugins give symbol navigation instead of text search, which reduces file reads (*read:* [costs docs](https://code.claude.com/docs/en/costs)). Measured claims for graph indexes are self-published: one DEV post says 38–64% fewer tokens across five repos with smaller cost savings, and a competitor says no cost saving (*claims*, from a search summary). `tokless index` builds a CodeGraph index. Per my notes, `tokless doctor` reported it missing for one project on 3 Nov, and I haven't rechecked. Run the step 2 clones with and without it.
+| Lead | Stars | Licence | What backs it | What to take |
+|---|---|---|---|---|
+| Anthropic, long-running agents (above) | – | – | Anthropic engineering (*read*) | Progress note plus git log as the handover. Experiment 1 |
+| [mattpocock/skills](https://github.com/mattpocock/skills) `handoff` | 311k | MIT | Written by Matt Pocock, who I know as a widely followed TypeScript teacher (my background knowledge, not checked). No token measurement. *Read:* its 940-byte `SKILL.md` | Link to commits and docs instead of repeating them. Experiment 1 |
+| [claude-auto-handoff](https://github.com/alexknowshtml/claude-auto-handoff), [REMvisual](https://github.com/REMvisual/claude-handoff), [baton](https://github.com/blader/baton), [TheFlow0360](https://github.com/TheFlow0360/claude-handoff) | 117, 70, 62, 0 | MIT | Nothing found | Same idea. Section ideas for the custom skill: decisions, failed approaches, next step |
+| [CodeGraph](https://github.com/colbymchenry/codegraph), [Serena](https://github.com/oraios/serena), [jCodeMunch](https://github.com/jgravelle/jcodemunch-mcp) | 76k, 31k, 2.8k | MIT, not detected, not detected | Savings are the projects' own claims. Claude Code's docs favour code intelligence (*read*) | Experiment 3 |
+| [Aider](https://github.com/Aider-AI/aider) repo map | 50k | Apache-2.0 | Long track record. No independent saving found (*read:* [docs](https://aider.chat/docs/repomap.html)) | Budget the brief in tokens and rank what stays. No map |
+| [Cline](https://github.com/cline/cline) Memory Bank | 71k | Apache-2.0 | One Reddit comment and vendor posts. The verdict is "fine if lean and current" | The shape of `activeContext.md` (focus, recent changes, next steps) for the note |
+| [claude-mem](https://github.com/thedotmack/claude-mem) | 112k | Apache-2.0 | Its 10× is its own figure and about memory retrieval. One comparison estimates 5–8k tokens of overhead per session (*claims*) | Not adopting: a background worker and an LLM call per tool use |
+| [Caveman](https://github.com/JuliusBrussee/caveman) | 117k | Apache-2.0 | JetBrains: 8.5% fewer output tokens, quality unchanged (*read*) | Nothing for the brief |
+| [rtk](https://github.com/rtk-ai/rtk) | 85k | Apache-2.0 and BUSL-1.1 | JetBrains: 7.6% higher cost at low effort, no change at high (*read*) | A test condition, not an idea |
+| [Headroom](https://github.com/headroomlabs-ai/headroom) | 79k | Apache-2.0 | Its own 21–57%. No independent test found | A test condition, not an idea |
+| [Repomix](https://github.com/yamadashy/repomix), [ai-memory](https://github.com/akitaonrails/ai-memory) | 29k, 15k | MIT | Own claims. Repomix packs the whole repo, ai-memory is a whole memory product | Nothing |
+| [sem](https://github.com/Ataraxy-Labs/sem), [git-prism](https://github.com/mikelane/git-prism) | 3.4k, 5 | Apache-2.0 | Savings are the author's own posts (sem). git-prism's README has no figure | Both say what changed, which git holds. git-prism puts dependency changes first |
+| [episodic-memory](https://github.com/obra/episodic-memory) | 500 | MIT | Already installed here | On-demand search, not a brief |
 
-Also before the next measurement: check whether the `rtk` hook is on in Claude Code (the binary is at `~/.local/bin/rtk`, the hook wasn't checked) and whether the session goes through Headroom. Either shrinks the `git show` output after the brief.
+Not looked up: Git Context Controller (a paper), Augment Context Lineage (a vendor blog), [claude-remember](https://github.com/Digital-Process-Tools/claude-remember) (207 stars), claude-code-worklog (8), AgentDiffViewer (0), powercontext, memory-journal-mcp, phalanx-ai.
 
-**Leads you listed**
+**Limits.** Web search is US-only and in the quick mode, so reception comes from blogs and aggregators, not from the threads themselves. Star counts and licences are as of 3 Nov 2026 and come from the unauthenticated GitHub API. The commit counts cover three small repos. The JetBrains numbers are theirs, from SkillsBench rather than from repos like yours. Before the next run, check whether the `rtk` hook and Headroom are on in your Claude Code. Neither was in these tests.
 
-- **Aider repo map.** Apache-2.0. *Read:* [docs](https://aider.chat/docs/repomap.html). Files with key symbols and signature lines, ranked by a file-dependency graph to fit a token budget (`--map-tokens`, default 1k). *Take:* budget the brief in tokens and rank what stays, because `catchup()` today cuts the tail at 9,500 characters. The map itself is orientation, so don't add one.
-- **Cline Memory Bank.** Apache-2.0 (Cline). *Read:* [docs](https://docs.cline.bot/best-practices/memory-bank). Six hand-kept markdown files read at session start. *Take:* only the shape of `activeContext.md` (focus, recent changes, next steps) for the note. *Skip:* the static files restate what agents read anyway. *Claim:* a rival says Cline reads all six every session.
-- **Repomix.** MIT. *Read:* [README](https://github.com/yamadashy/repomix). Packs a repo into one file, with `--compress` (signatures only), `--include-diffs`, `--include-logs` and per-file token counts. *Take:* nothing. It packs the whole repo, which is orientation, not a delta.
-- **claude-mem.** Apache-2.0. *Read:* [progressive disclosure](https://docs.claude-mem.ai/progressive-disclosure) (partly), [file read gate](https://docs.claude-mem.ai/file-read-gate). An index of past work with token costs, and a gate that swaps whole-file reads of big files (32 KB and up) for outlines. *Take:* nothing now. *Not adopting:* a background worker and a tree-sitter download. *Claims:* an LLM call (Haiku by default) per tool use, from a search summary. Its 10–12× benchmark is its own and is about exploring code.
-- **episodic-memory.** MIT, already yours. *Read:* README. Semantic search over past chats, used on demand. *Take:* nothing for the brief.
-- **Caveman.** Apache-2.0. *Read:* README. A terse output voice, plus a "read less" compressor for logs and CSV. *Claim:* 33.2% fewer input tokens over whole sessions, HTML 9.9% worse. *Take:* nothing. The voice shrinks output, and my reading is that diffs aren't repetitive enough for the compressor.
-- **Headroom.** Apache-2.0. *Read:* [README](https://github.com/headroomlabs-ai/headroom). A compressing proxy that keeps originals retrievable. *Claim:* 21–57% saved on four scenarios of its own. A test condition, not an idea.
-- **rtk.** Apache-2.0 + BUSL-1.1 for the full build, Apache-2.0 for `rtk-oss`. *Read:* README. A hook shrinks `git log` and `git diff` output. Its README says the saving dilutes (bash output is part of the input, input is part of the bill), as step 2 found. A test condition, as above.
+### See everything *(done)*
 
-**Other finds**
-
-- **git-prism.** Apache-2.0, 5 stars. *Read:* [README](https://github.com/mikelane/git-prism). An MCP server returning per-file and per-commit JSON: functions changed, imports, dependency changes. *Take:* dependency changes are a first-class item. The function-level part says what changed, which git holds, so it's off the shortlist for now. The README has no measured saving.
-- **ai-memory** (akitaonrails). MIT. *Read:* parts of the README. Zero LLM calls on the default path, and a bounded brief. *Take:* deterministic first. It's a whole memory product, so not adopting.
-- **Anthropic, [Effective context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents).** *Read:* the sections on just-in-time loading and note-taking. Backs a brief of pointers plus a note.
-- **Claude Code [costs docs](https://code.claude.com/docs/en/costs).** *Read:* `/clear` between tasks, `CLAUDE.md` under 200 lines, hooks that filter output before the model sees it, specific prompts. They also suggest a "codebase-overview" skill, which the studies above don't support.
-
-**Seen only in search results, not read** (round 2)
-
-- **sem** (Ataraxy Labs, entity-level diff CLI). Apache-2.0 per an aggregator. Its savings figures are from its author's Reddit posts.
-- **Git Context Controller** (arXiv 2508.00031, *claim:* compressed recent context beat full-history dumps) and **Augment Context Lineage** (vendor blog: indexes commit history, a small LLM condenses diffs, fetched on demand).
-- **claude-code-worklog** (an LLM summary at every session start), AgentDiffViewer, claude-remember, powercontext, memory-journal-mcp, phalanx-ai, and the dev.to piece on what `/compact` costs.
-- **Code indexes:** CodeGraph, jCodeMunch and Serena. Savings are self-published, and I found no figures for Serena.
-- **Catalogs:** `npx skills find` (run once, in the first pass) ranks `handoff` skills highest and found nothing for "what changed since". The MCP registry listed only hosted services, which I skipped because they'd send context off the machine, against decision 3.
-
-**Limits.** Web search is US-only and mostly the quick mode. GitHub's API rate-limited me part-way, so a few licences come from `LICENSE` files or READMEs. Licences and star counts are as of 3 Nov 2026. The commit counts cover three small repos, and the handoff measurement has 2 runs per arm. Round 2: sem, ai-memory's `ARCHITECTURE.md`, the `rtk` and Headroom check, and a code index test.
-
-### See everything
-
-3. **Agent trailers.** Tell agents through `AGENTS.md` to add `Agent:` and `Why:`. *Done when: a week's commits carry them without reminders.* **Built and checked with real sessions. The week of real use is still to come.**
+3. **Agent trailers.** Tell agents through `AGENTS.md` to add `Agent:` and `Why:`. *Done when: a week's commits carry them without reminders.* **Built and checked with real sessions. The week of real use started on 2026-11-03, in OmniCodeSpace itself.**
    - **What `enable` does:** it adds the rule to `AGENTS.md`. When the repo has no `CLAUDE.md`, it also creates one holding just `@AGENTS.md`. When the repo has one, it adds the rule there instead.
    - **Why the import:** Claude Code is meant to fall back to `AGENTS.md` when there's no `CLAUDE.md`, but in testing it loaded the file only some of the time. With the import, a normal Claude session and one started as Builder both wrote `Agent:` and `Why:` without being told.
    - **Codex:** it wrote both trailers by itself. Its sandbox then blocked the commit (`.git/index.lock`), so in normal use it would ask you first.
@@ -343,13 +373,31 @@ Also before the next measurement: check whether the `rtk` hook is on in Claude C
    - **Codex:** sandbox, approvals, network, this project's trust, MCP servers, skills and plugins.
    - **Names only:** commands, arguments and environment values never leave the server, and a test checks it.
    - **CC Switch:** it isn't installed on this PC (no `~/.cc-switch`), so its database couldn't be checked. The files are read directly.
-6. **Roster tab.** Prototype B, built from session timestamps plus scheduled tasks. Finding where schedules are stored is part of this step. *Done when: today's runs show correctly.*
+6. **Roster tab.** Prototype B, built from session timestamps plus scheduled tasks. Finding where schedules are stored is part of this step. *Done when: today's runs show correctly.* **Done, checked in the browser against today's real sessions.**
+   - **Rows:** one per agent per project, or per tool when a chat ran as no agent. Each log is split into stretches of work wherever it pauses for over 15 minutes, so a chat resumed in the evening shows as a second bar, not one long one.
+   - **Where schedules live:** Codex keeps each automation in `~/.codex/automations/<id>/automation.toml`, with an iCalendar rule. These are read, and your Friday report shows its next run. Claude's desktop app keeps a `scheduled-tasks.json`, but it was empty here, so its entry format is unknown and it isn't read yet. Cloud routines run in the cloud, and session crons die with their session, so neither has a local file. Windows Task Scheduler isn't read.
 
-### Start agents
+**Checks added for steps 3 to 6.** Each step had unit tests. These are the checks against real data that were still missing:
 
-7. **Run an agent in a new worktree.** `git worktree add`, then spawn the CLI (`claude -p` or `codex exec`). This is the first time the app writes, so it adds a per-launch API token and a confirm dialog first. Read Vibe Kanban's approach before starting. *Done when: you can start a task, see it finish and review the branch.*
-8. **Live output and stop.** Stream output over SSE, with a stop button. *Done when: you can watch and stop a run.*
-9. **Approval on risky actions.** Default to no push, and let the UI approve. *Done when: an agent can't push without your click.*
+- **Scope panel against your real config:** it showed Codex `workspace-write`, approvals on request, network on and OmniCodeSpace not trusted, plus no Claude rules. All of these match `~/.codex/config.toml` and `~/.claude/settings.json`.
+- **A bug it found, now fixed:** one chat logs to two files when its folder changes partway, as this planning chat did, so two entries shared an id. React warned about the duplicate keys, and opening one in the Tracks inspector opened both. Entries are now told apart by their log file.
+- **Speed:** the Roster's API answers in about 11 ms once logs are cached.
+- **Still open:** the week of real commits with trailers (step 3). `omni enable` ran in OmniCodeSpace on 2026-11-03. Check its commits for `Agent:` and `Why:` around 2026-11-10.
+
+### Start agents *(7 to 9 done, 10 waits for your local models)*
+
+7. **Run an agent in a new worktree.** `git worktree add`, then spawn the CLI (`claude -p` or `codex exec`). This is the first time the app writes, so it adds a per-launch API token and a confirm dialog first. Read Vibe Kanban's approach before starting. *Done when: you can start a task, see it finish and review the branch.* **Done, checked with a real Haiku run from the app's dialog, for $0.02.**
+   - **Where:** branch `omni/<task words>-<id>` from the project's current commit, in a folder beside it, `<project>.worktrees/<same name>`. Your checkout isn't touched. Worktrees stay until you remove them with `git worktree remove`.
+   - **Claude Code:** `claude -p` with the task on stdin, stream-json output, edits allowed in the worktree, and `git add` and `git commit` allowed. Other commands follow your own permission rules, and the run lists the ones they refused.
+   - **Codex:** `codex exec --json` with `workspace-write` and the network off. The app finds the CLI inside the Codex desktop app's folder, since it isn't on your PATH. Its sandbox keeps `.git` read-only, so `git add` fails and its changes stay uncommitted for you to review. A real run confirmed both. **Side effect:** `codex exec` adds a trust entry for the project to your global `~/.codex/config.toml`, one per repo rather than per worktree. My tests left three, for throwaway folders, at lines 266, 275 and 278. They're safe to delete.
+   - **Review:** the run's commits, uncommitted files and diff against the start.
+   - **Vibe Kanban, read first:** it's Apache-2.0 Rust and sunsetting into community upkeep. It gates every tool call through a PreToolUse hook and has no push check of its own, which shaped step 9.
+8. **Live output and stop.** Stream output over SSE, with a stop button. *Done when: you can watch and stop a run.* **Done.** Output arrives as readable lines (messages, commands, errors). Stop ends the whole process tree (`taskkill /T` on Windows). Checked live and in tests.
+9. **Approval on risky actions.** Default to no push, and let the UI approve. *Done when: an agent can't push without your click.* **Done.** In the real run, Haiku put add, commit and push into one PowerShell command. The run went amber with that command shown, and the push reached the stand-in remote only after the click.
+   - **Claude Code:** a PreToolUse hook (`server/gate.ts`) catches any shell command that mentions git and push, and waits up to 9 minutes for Allow or Refuse. Anything else, including no answer, refuses.
+   - **Codex:** the network is off, so it can't push at all, and there's nothing to approve.
+   - **Who can answer:** the agent gets a key that can only ask. Answering needs the token in the page.
+   - **Limits:** this is a guardrail against mistakes, not a sandbox. A push from inside a script file isn't caught, and an agent determined to get round it could fetch the page's token. A push to a remote that is a folder on this PC needs no network, so Codex's network switch doesn't stop it. Its sandbox should block the write, but that wasn't tested.
 10. **Local and other models.** Add a local model through OpenCode and Ollama, as a third adapter. *Done when: the same task can run on Claude, Codex or a local model.*
 
 ### Pass work between agents
@@ -361,7 +409,7 @@ Also before the next measurement: check whether the `rtk` hook is on in Claude C
 
 13. **Move to ACP** for richer control and more LLMs, once the CLI adapters feel limiting.
 14. **Other machines.** Each machine pushes `refs/omni/status/<machine>`, so all of them appear in the tree with no server.
-15. **Package it** (decision 4), and **Map view**.
+15. **Package it** (decision 4).
 16. **Optional integrations:** Entire checkpoints, Beads tasks.
 
 ## Decisions for you
@@ -374,11 +422,14 @@ Everything has a default, so none of these block step 1.
 4. **Stay in the browser, or become a desktop app?** My default: browser until step 15. Then Tauri (small, and CC Switch proves it works) would need a Node sidecar or a Rust rewrite, while Electron (large) keeps all the code as is.
 5. **Should `seen` refs be shared between machines?** My default: no, each machine tracks its own. Sharing is one push setting if you want it later.
 6. **Open source, and which licence?** My default: MIT, once it's useful. I haven't checked whether the name OmniCodeSpace is taken.
-7. **Which view next?** My default: Tracks stays home, Roster second.
+7. **Which view is home?** My default: Tracks first, then Roster and Map as tabs, as built.
 
 ## Hurdles
 
-- **Terms of use (check before step 7).** Reports say Anthropic restricts subscription logins to its own products and has enforced this against third-party tools. Reports conflict on the Agent SDK and on `claude -p`, including one that describes a separate credit pool. I found nothing that settles whether a wrapper launching the official CLI is allowed, and I didn't read Anthropic's terms directly. Sources: [The Register](https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access), [WinBuzzer](https://winbuzzer.com/2026/02/19/anthropic-bans-claude-subscription-oauth-in-third-party-apps-xcxwbn/). Don't take this as legal advice. Read the current terms yourself.
+- **Terms of use.** Before step 7 I read Anthropic's own pages. They lean towards allowing what the app does, but nothing settles it.
+  - **For:** the [headless docs](https://code.claude.com/docs/en/headless) show scripts wrapping `claude -p`. `claude setup-token` makes a subscription token for "scripts" and CI ([authentication](https://code.claude.com/docs/en/authentication)). The [legal page](https://code.claude.com/docs/en/legal-and-compliance) aims the OAuth restriction at developers who offer Claude login in their own products, and says it doesn't stop you signing in to the unmodified Claude Code binary yourself.
+  - **Against:** the [Consumer Terms](https://www.anthropic.com/legal/consumer-terms) bar automated access except through an API key or where Anthropic explicitly allows it, and limit use to non-commercial. No page says whether the `-p` docs count as that permission.
+  - **In practice:** the app only starts the official, unmodified CLI on your own machine, for you. If `ANTHROPIC_API_KEY` is set, `claude -p` uses the key instead of your subscription. Older news reports: [The Register](https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access). Don't take this as legal advice.
 - **Log formats can change.** Claude Code and Codex logs are internal, so an update could break the reader. The parsers skip what they don't know, and CC Switch's MIT parsers are a reference when that happens.
 - **Cloud sessions are invisible locally.** Their logs aren't on this PC, and I found no public API listing them. You'd see only what they push, which is another reason orders use git.
 - **Orders are untrusted input.** A branch that tells an agent what to do is a prompt-injection and remote-code path. Nothing runs without your approval, order text is treated as data, and only branches from your own remote count. Consider signed commits before ever allowing auto-run.
@@ -394,11 +445,16 @@ Everything has a default, so none of these block step 1.
 - Labels can overlap a crossing track, and a label hides when there's no room. The commit list below always has the full names.
 - The shaded "new" area follows commit time, so it isn't exactly `seen..HEAD`. The brief is the exact one.
 - Only Claude Code and Codex logs are read, and repos are found one folder deep.
-- Lamps only mean "log touched in the last 10 minutes". "Waiting for you" needs step 8.
-- The API runs inside the Vite dev server, with no production build yet.
+- Lamps for chats you started yourself still mean "log touched in the last 10 minutes". Only runs started from the app know when they're waiting for you.
+- The API runs inside the Vite dev server, with no production build yet. Editing a server file reloads it, which forgets started runs and makes a new token, so reload the page. A run's process keeps going until it ends.
+- **Runs live in memory.** Their branches, worktrees and tool logs stay, but the Roster's "Started from here" list empties when the server restarts.
+- **A run has no time limit.** If the tool can't reach its API, it waits silently. A Codex run did this while your Headroom proxy on port 8787 was down. Use Stop.
+- **The app never removes worktrees.** Remove one with `git worktree remove <folder>` once its branch is merged or dropped.
+- **Map:** up to 4 agents per tool and 2 remotes are drawn, and the details panel lists the rest. Dependencies are read from `package.json`, `pom.xml`, Gradle, `requirements.txt` and `.csproj` files only.
+- **Schedules:** only Codex automations are read, and only daily, weekly and hourly rules.
 - A forked Claude chat starts from the tool's shared pointer, so it can miss changes its parent chat hadn't heard about. It stays silent rather than saying something false.
 - `enable` has no undo command, and the README lists the manual steps. Per-chat refs are never pruned.
-- **Plugin agents everywhere:** agents from user-level plugins appear in every repo, even if they never ran there.
+- **Plugin agents everywhere:** agents from user-level plugins appear in every repo's agent list, even if they never ran there. The Map draws only the ones defined in the project or with runs there.
 - **Not read:** claude.ai connectors, managed company settings, and permissions set only on the command line.
 - **Codex project config:** a repo's `.codex/config.toml` is shown even when Codex wouldn't apply it, which happens when the project isn't trusted.
 - **Small parsers:** frontmatter and TOML are read by small parsers that handle the common forms only. Unusual files may show blank fields.
