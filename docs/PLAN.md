@@ -146,6 +146,7 @@ There's no database and no service of our own. Git and the tools' logs are the s
 | Git access | The `git` command | Complete and exact. Libraries only cover part of it |
 | Commit graph | About 30 lines of own code | Small, tested, and packages didn't clearly fit |
 | Storage | None yet, then `node:sqlite` if needed | Built into Node, no dependency |
+| Charts | Vega-Lite, loaded with the Data tab | Specs are JSON, so any agent can write one without running code. See "Data and charts" |
 | Live updates | Polling every 5 seconds, then SSE | Enough until agents stream output |
 | Starting agents | Each tool's own CLI first, ACP later | Same tools you already use |
 | Remote access | Tailscale, if ever | Avoids building login and security |
@@ -432,6 +433,38 @@ Asked for on 2026-11-05: one to-do list per project, shared by people and agents
 6. **Newer list on the remote.** The orders fetch already runs every 5 minutes. It could also say when `origin`'s `TODO.md` is newer than yours.
 7. **Later:** a board view, sync with GitHub Issues, priorities and due dates in todo.txt style. Skip an MCP server: agents already edit the file.
 
+### Data and charts *(step 1 built 2026-11-05)*
+
+Asked for on 2026-11-05: visualization tools inside the app, flexible enough for many kinds of data, without a database and without pushing heaps of data to GitHub.
+
+**Renderer, decided: Vega-Lite.** A chart is a JSON spec, so people, code and agents of any LLM can all write one, and a saved chart is a few KB of text you can review in a diff. The alternatives: Observable Plot is smaller (about 90 KB gzipped) but its specs are JavaScript. Perspective lets users pivot any table, but it is heavy WebAssembly and hard to restyle. Mosaic with DuckDB-WASM handles millions of rows, which nothing here has yet. Tracks, Roster and Map stay hand-drawn SVG.
+
+**Where data lives.** Nothing new is pushed unless you choose to.
+
+| Tier | What | Where |
+|---|---|---|
+| 0 | Worked out on demand from git and the tools' logs (all of step 1) | Memory |
+| 1 | Machine-only records: hook events, experiment runs, imported files | `<git-common-dir>/omni/*.jsonl` per repo, `~/.omni/` across repos. Never pushed |
+| 2 | Small things worth sharing: saved chart specs, machine status | `.omni/charts/*.vl.json` committed, `refs/omni/status/<machine>` (step 14) |
+| 3 | Large datasets | CSV or Parquet in an ignored folder, shared by link or Git LFS. Queried with DuckDB only if memory gets slow |
+
+**Step 1, built.** A Data tab per project, with three charts, a range picker and a table under each chart:
+
+- **Uncached tokens per day, by tool.** These are the tokens step 2 found to drive cost. Cache reads are in the tooltip and the table.
+- **When agents work here:** agent-minutes per weekday and hour, with stretches of work split at each hour. Subagents are left out, since they overlap the chat that started them.
+- **Who commits:** commits per week by the agent each commit names. The three busiest names keep their colour across ranges, and the rest share "Other".
+- **How:** `GET /api/data` returns the newest 2,000 commits on every branch and the project's sessions. `src/datasets.ts` turns them into rows in the browser's time zone. `src/Chart.tsx` loads Vega only when the tab opens, and reads its colours from the theme. The chart colours passed the dataviz palette check against the sheet of each of the four themes. The app's own track colours `a3` and `a4` would fail its chroma floor, so charts use their own.
+- **Checked:** tests for the three row builders. In the browser, Day and Night themes, a 3-day-old project and a 40-commit one. The commit counts matched `git log` (6 by Claude Code and 2 unsigned here, and 14, 12, 3 and 11 a week in the JPA workshop).
+- **Limits:** a session's tokens all count on the day it was last active. Chart specs written by agents aren't accepted yet: before they are, Vega needs a loader that refuses URLs and its CSP-safe expression interpreter.
+
+**Next, in order.** Each ends in something you can check.
+
+2. **Make your own chart:** pick any dataset, get a chart chosen from its field types, change x, y, colour and mark, and save the spec.
+3. **File datasets:** CSV, JSON or JSONL dropped into `~/.omni/data/`, with size limits.
+4. **Hook events:** Claude Code's `Notification`, `Stop` and `PostToolUse` hooks append to `<git-common-dir>/omni/events.jsonl`. That gives real "waiting for you" lamps for chats you started yourself, and a collision matrix of worktrees and the files they change.
+5. **Charts from agents:** an MCP tool or a spec in an order's report, drawn by the app, with the safeguards above.
+6. **DuckDB or Mosaic,** only if data outgrows memory.
+
 ### Later, if it earns it
 
 13. **Move to ACP** for richer control and more LLMs, once the CLI adapters feel limiting.
@@ -454,6 +487,8 @@ Everything has a default, so none of these block step 1.
 
 ## Hurdles
 
+Checked against the code on 2026-11-05: all still current. Code can soften the terms, log-format, untrusted-orders and merge-conflict hurdles, and `docs/superpowers/plans/2026-11-05-rough-edges.md` plans that, together with the rough edges below.
+
 - **Terms of use.** Before step 7 I read Anthropic's own pages. They lean towards allowing what the app does, but nothing settles it.
   - **For:** the [headless docs](https://code.claude.com/docs/en/headless) show scripts wrapping `claude -p`. `claude setup-token` makes a subscription token for "scripts" and CI ([authentication](https://code.claude.com/docs/en/authentication)). The [legal page](https://code.claude.com/docs/en/legal-and-compliance) aims the OAuth restriction at developers who offer Claude login in their own products, and says it doesn't stop you signing in to the unmodified Claude Code binary yourself.
   - **Against:** the [Consumer Terms](https://www.anthropic.com/legal/consumer-terms) bar automated access except through an API key or where Anthropic explicitly allows it, and limit use to non-commercial. No page says whether the `-p` docs count as that permission.
@@ -469,6 +504,8 @@ Everything has a default, so none of these block step 1.
 - **Scope creep.** The largest risk is rebuilding CC Switch and Vibe Kanban. If a step duplicates them, link to them instead.
 
 ## Rough edges in the scaffold
+
+Checked against the code on 2026-11-05: all still current. Most have a fix planned in `docs/superpowers/plans/2026-11-05-rough-edges.md`, and that plan lists the ones that stay as known limits.
 
 - Labels can overlap a crossing track, and a label hides when there's no room. The commit list below always has the full names.
 - The shaded "new" area follows commit time, so it isn't exactly `seen..HEAD`. The brief is the exact one.

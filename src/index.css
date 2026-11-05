@@ -75,6 +75,28 @@
   --color-since: rgb(227 176 75 / 0.07);
 }
 
+/* Chart colours, checked with the dataviz palette validator against each theme's sheet colour.
+   Series 1 to 3 tell things apart, "other" is the rest, and low to high is a one-hue scale for amounts. */
+:root {
+  --chart-1: #2346c4;
+  --chart-2: #c25a1c;
+  --chart-3: #00897b;
+  --chart-other: #7d8982;
+  --chart-low: #cde2fb;
+  --chart-high: #104281;
+}
+
+[data-theme="night"],
+[data-theme="blueprint"],
+[data-theme="graphite"] {
+  --chart-1: #7088f2;
+  --chart-2: #d8722f;
+  --chart-3: #1aa592;
+  --chart-other: #7a857e;
+  --chart-low: #1c3a66;
+  --chart-high: #9ec5f4;
+}
+
 body {
   background: var(--color-sheet);
   color: var(--color-ink);

@@ -94,13 +94,17 @@ export async function worktrees(path: string): Promise<Worktree[]> {
   }))
 }
 
+// The newest commits on every branch, local and remote.
+export async function history(path: string, count: number) {
+  return (await rev(path, 'HEAD')) ? parseLog(await git(path, 'log', 'HEAD', '--branches', '--remotes', '--date-order', '-n', String(count), `--format=${LOG_FORMAT}`)) : []
+}
+
 export async function repoDetail(path: string) {
   const summary = await repoSummary(path)
-  const hasCommits = Boolean(summary.last)
   const seen = await git(path, 'for-each-ref', 'refs/omni/seen', '--format=%(refname:lstrip=3) %(objectname)')
   return {
     ...summary,
-    commits: hasCommits ? parseLog(await git(path, 'log', 'HEAD', '--branches', '--remotes', '--date-order', '-n', '60', `--format=${LOG_FORMAT}`)) : [],
+    commits: await history(path, 60),
     worktrees: await worktrees(path),
     seen: seen ? seen.split('\n').map((line) => { const [agent, sha] = line.split(' '); return { agent, sha } }) : [],
   }

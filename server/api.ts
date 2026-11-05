@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { homedir, hostname } from 'node:os'
 import { delimiter, join } from 'node:path'
-import { catchup, findRepos, repoDetail, repoSummary } from './git.ts'
+import { catchup, findRepos, history, repoDetail, repoSummary, worktrees } from './git.ts'
 import { ORDER_BRANCH, checkOrders, runOrder, sendOrder } from './orders.ts'
 import { schedules } from './schedules.ts'
 import { allSessions, projectOf, sessionsIn } from './sessions.ts'
@@ -67,6 +67,12 @@ async function route(url: URL) {
     }
     case '/setup':
       return setup(await knownRepo(path))
+    case '/data': {
+      const repo = await knownRepo(path)
+      const folders = (await worktrees(repo)).map((w) => w.path).concat(repo)
+      // shortcut: the newest 2,000 commits, read by date range instead when a project's charts need more.
+      return { commits: await history(repo, 2000), sessions: sessionsIn(await allSessions(), folders) }
+    }
     case '/map': {
       const repo = await knownRepo(path)
       const [built, linked] = await Promise.all([stack(repo), remotes(repo)])

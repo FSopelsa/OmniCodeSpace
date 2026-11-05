@@ -20,6 +20,7 @@ A local workspace for coding agents and the people running them, with git as the
 - **Start an agent:** runs Claude Code or Codex on a task in a new branch and folder, streams its output, can stop it, waits for your click before Claude Code pushes, and shows the branch for review.
 - **Orders:** takes tasks that agents elsewhere push as git branches, runs them after your click, and sends a report back on the same branch. Read-only questions about another project start by themselves.
 - **To-do:** one shared list per project in `TODO.md`, for people and agents alike, plus the `TODO` and `FIXME` comments in its code. After an edit, it reminds you to commit and push the list.
+- **Data:** charts of one project's work, from git and the tools' logs: uncached tokens per day by tool, agent-minutes by hour of the week, and commits per week by who made them. Pick a range from 7 days to all time, and open any chart as a table of the same numbers.
 
 ## Requirements
 
@@ -189,5 +190,5 @@ npm run check
 - `server/api.ts`: the local API.
 - `server/cli.ts`: the command line.
 - `server/enable.ts`: turns on automatic catch-up for a repo.
-- `src/`: the React interface, with the Tracks, Roster, Map and To-do views. `lanes.ts` places commits on tracks, `roster.ts` lays out the day.
+- `src/`: the React interface, with the Tracks, Roster, Map, To-do and Data views. `lanes.ts` places commits on tracks, `roster.ts` lays out the day, `datasets.ts` turns sessions and commits into chart rows, and `Chart.tsx` draws a Vega-Lite spec with a table beside it.
 - `docs/PLAN.md`: research, decisions and next steps.

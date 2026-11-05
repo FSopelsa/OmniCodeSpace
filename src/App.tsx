@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Commit, Worktree } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
 import type { AgentDef, Named, Setup } from '../server/setup.ts'
+import { DataView } from './Data.tsx'
 import { MapView } from './Map.tsx'
 import { useOrders } from './Orders.tsx'
 import { Roster } from './Roster.tsx'
@@ -241,7 +242,7 @@ function RepoView({ path }: { path: string }) {
   )
 }
 
-const VIEWS = { tracks: 'Tracks', roster: 'Roster', map: 'Map', todo: 'To-do' } as const
+const VIEWS = { tracks: 'Tracks', roster: 'Roster', map: 'Map', todo: 'To-do', data: 'Data' } as const
 
 export function App() {
   const { data, error } = useJson<{ roots: string[]; repos: Summary[] }>('/api/repos', 30000)
@@ -315,7 +316,7 @@ export function App() {
             ))}
           </ul>
         </nav>
-        {!current ? <div /> : view === 'map' ? <MapView key={current} path={current} /> : view === 'todo' ? <TodoView key={current} path={current} /> : <RepoView key={current} path={current} />}
+        {!current ? <div /> : view === 'map' ? <MapView key={current} path={current} /> : view === 'todo' ? <TodoView key={current} path={current} /> : view === 'data' ? <DataView key={current} path={current} /> : <RepoView key={current} path={current} />}
       </div>
       )}
     </div>
