@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
-import { allSessions, projectOf, sessionsIn } from '../server/sessions.ts'
+import { allSessions, claudeLimits, codexLimits, projectOf, sessionsIn } from '../server/sessions.ts'
 
 const home = mkdtempSync(join(tmpdir(), 'omni-home-'))
 after(() => rmSync(home, { recursive: true, force: true }))
@@ -79,4 +79,33 @@ test('names the project a session belonged to, including worktrees this app star
   assert.equal(projectOf('C:\\Work\\Shop.worktrees\\add-login-3f2a', repos), 'Shop')
   assert.equal(projectOf('C:\\Work\\Shop-web', repos), 'Shop-web')
   assert.equal(projectOf('C:\\Elsewhere\\Tool', repos), 'Tool')
+})
+
+test('reads plan usage from the newest Codex log and the Claude widget file', async () => {
+  const plan = mkdtempSync(join(tmpdir(), 'omni-plan-'))
+  after(() => rmSync(plan, { recursive: true, force: true }))
+  delete process.env.CLAUDE_CONFIG_DIR
+  const usage = (timestamp: string, limits: unknown) => ({ type: 'event_msg', timestamp, payload: { type: 'token_count', rate_limits: limits } })
+  const dir = join(plan, '.codex', 'sessions')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'old.jsonl'), jsonl([
+    { type: 'session_meta', timestamp: '2026-11-01T09:00:00Z', payload: { id: 'old', cwd: 'C:/Work' } },
+    usage('2026-11-01T09:00:00Z', { limit_id: 'codex', primary: { used_percent: 90, window_minutes: 300, resets_at: 100 } }),
+  ]))
+  writeFileSync(join(dir, 'new.jsonl'), jsonl([
+    { type: 'session_meta', timestamp: '2026-11-02T09:00:00Z', payload: { id: 'new', cwd: 'C:/Work' } },
+    usage('2026-11-02T09:00:00Z', { primary: { used_percent: 20, window_minutes: 300, resets_at: 200 }, secondary: { used_percent: 140 } }),
+    // Another bucket and a reading with no usable windows leave the last good reading in place.
+    usage('2026-11-02T09:05:00Z', { limit_id: 'other', primary: { used_percent: 5 } }),
+    usage('2026-11-02T09:06:00Z', { primary: null }),
+  ]))
+  assert.deepEqual(codexLimits(await allSessions(plan)), { at: '2026-11-02T09:00:00Z', windows: [{ used: 20, minutes: 300, resets: 200 }] })
+
+  assert.equal(await claudeLimits(plan), null)
+  mkdirSync(join(plan, '.claude', 'usage-widget'), { recursive: true })
+  const file = join(plan, '.claude', 'usage-widget', 'usage.json')
+  writeFileSync(file, JSON.stringify({ received_at: '2026-11-05T14:16:49.2960863+00:00', rate_limits: { five_hour: { used_percentage: 29, resets_at: 300 }, seven_day: { used_percentage: 50, resets_at: null } } }))
+  assert.deepEqual(await claudeLimits(plan), { at: '2026-11-05T14:16:49.296Z', windows: [{ used: 29, minutes: 300, resets: 300 }, { used: 50, minutes: 10080, resets: 0 }] })
+  writeFileSync(file, '{"received_at":')
+  assert.equal(await claudeLimits(plan), null)
 })

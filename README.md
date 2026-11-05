@@ -21,6 +21,7 @@ A local workspace for coding agents and the people running them, with git as the
 - **Orders:** takes tasks that agents elsewhere push as git branches, runs them after your click, and sends a report back on the same branch. Read-only questions about another project start by themselves.
 - **To-do:** one shared list per project in `TODO.md`, for people and agents alike, plus the `TODO` and `FIXME` comments in its code. After an edit, it reminds you to commit and push the list.
 - **Data:** charts of one project's work, from git and the tools' logs: uncached tokens per day by tool, agent-minutes by hour of the week, and commits per week by who made them. Pick a range from 7 days to all time, and open any chart as a table of the same numbers.
+- **Plan left:** the header shows how much of the Codex and Claude Code subscription windows is left, with reset times on hover. Codex readings come from its own logs. Claude readings come from the snapshot that [TokenUsageTracker](https://github.com/FSopelsa/TokenUsageTracker)'s status-line bridge writes to `~/.claude/usage-widget/usage.json`, so Claude shows "no reading" until that bridge is set up. A reading older than an hour shows its age.
 
 ## Requirements
 

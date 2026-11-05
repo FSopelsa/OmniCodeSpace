@@ -7,7 +7,7 @@ import { delimiter, join } from 'node:path'
 import { catchup, findRepos, history, repoDetail, repoSummary, worktrees } from './git.ts'
 import { ORDER_BRANCH, checkOrders, runOrder, sendOrder } from './orders.ts'
 import { schedules } from './schedules.ts'
-import { allSessions, projectOf, sessionsIn } from './sessions.ts'
+import { allSessions, claudeLimits, codexLimits, projectOf, sessionsIn } from './sessions.ts'
 import { answerRun, askRun, listRuns, reviewRun, startRun, stopRun, watchRun } from './runs.ts'
 import { setup } from './setup.ts'
 import { remotes, stack } from './stack.ts'
@@ -73,6 +73,8 @@ async function route(url: URL) {
       // shortcut: the newest 2,000 commits, read by date range instead when a project's charts need more.
       return { commits: await history(repo, 2000), sessions: sessionsIn(await allSessions(), folders) }
     }
+    case '/plan':
+      return { codex: codexLimits(await allSessions()), claude: await claudeLimits() }
     case '/map': {
       const repo = await knownRepo(path)
       const [built, linked] = await Promise.all([stack(repo), remotes(repo)])
