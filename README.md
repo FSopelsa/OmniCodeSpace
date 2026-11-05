@@ -35,7 +35,7 @@ npm install
 npm run dev
 ```
 
-Then open http://127.0.0.1:5173. It looks in `~/IdeaProjects` by default. To use other folders, set `OMNI_ROOTS` to a list separated by `;` on Windows or `:` elsewhere.
+Then open http://127.0.0.1:5173. Pick a theme in the header: Day, or the dark themes Night, Blueprint and Graphite. Until you pick one, it follows your system's light or dark setting. It looks in `~/IdeaProjects` by default. To use other folders, set `OMNI_ROOTS` to a list separated by `;` on Windows or `:` elsewhere.
 
 ## Catching up agents automatically
 

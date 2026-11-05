@@ -37,7 +37,7 @@ export function StartDialog({ repos, current, order, onClose, onStarted }: { rep
   }
 
   return (
-    <dialog ref={ref} onClose={onClose} aria-labelledby="start-title" className="m-auto w-[min(640px,calc(100%-2rem))] border-2 border-ink bg-sheet p-5 text-ink backdrop:bg-ink/40">
+    <dialog ref={ref} onClose={onClose} aria-labelledby="start-title" className="m-auto w-[min(640px,calc(100%-2rem))] border-2 border-ink bg-sheet p-5 text-ink backdrop:bg-black/45">
       <form onSubmit={submit} className="grid gap-3">
         <h2 id="start-title" className="text-xl font-extrabold">{order ? 'Run this order' : 'Start an agent'}</h2>
         {order ? (

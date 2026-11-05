@@ -6,7 +6,7 @@ import { layout } from './lanes.ts'
 const STEP = 40
 const LANE = 48
 const PAD = 48
-const COLORS = ['var(--color-ink)', '#2346c4', '#8a2a7e', '#0e7c86', '#6f6410']
+const COLORS = ['var(--color-ink)', 'var(--color-a1)', 'var(--color-a2)', 'var(--color-a3)', 'var(--color-a4)']
 const ACTIVE_MS = 10 * 60 * 1000
 
 type Props = {

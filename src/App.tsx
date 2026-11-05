@@ -9,7 +9,7 @@ import { StartDialog } from './Runs.tsx'
 import { TodoView } from './Todo.tsx'
 import { Tracks } from './Tracks.tsx'
 import { AgentInfo, Names, agentRows } from './parts.tsx'
-import { Lamp, ago, button, count, isLive, modelName, primary, sessionName, useJson } from './ui.tsx'
+import { Lamp, THEMES, ago, applyTheme, button, count, isLive, modelName, primary, savedTheme, sessionName, useJson, type Theme } from './ui.tsx'
 
 type Summary = { name: string; path: string; branch: string; last: string; changed: number }
 type Detail = Summary & {
@@ -249,6 +249,7 @@ export function App() {
   const [view, setView] = useState<keyof typeof VIEWS>('tracks')
   const [run, setRun] = useState<string>()
   const [starting, setStarting] = useState(false)
+  const [theme, setTheme] = useState(savedTheme)
   const orders = useOrders()
   const waiting = orders.data?.orders.filter((o) => o.state === 'open' || o.state === 'ready').length ?? 0
   const repos = [...(data?.repos ?? [])].sort((a, b) => b.last.localeCompare(a.last))
@@ -267,6 +268,20 @@ export function App() {
         </nav>
         {waiting > 0 && <button onClick={() => setView('roster')} className={`${primary} ml-auto`}>Needs you · {waiting}</button>}
         <button onClick={() => setStarting(true)} disabled={!repos.length} className={`${button} ${waiting > 0 ? '' : 'ml-auto'}`}>Start an agent</button>
+        <label className="flex items-center gap-2 text-sm font-semibold">
+          Theme
+          <select
+            value={theme}
+            onChange={(e) => {
+              const picked = e.target.value as Theme
+              setTheme(picked)
+              applyTheme(picked, true)
+            }}
+            className="rounded-sm border border-ink-2 bg-sheet px-2 py-1 font-normal"
+          >
+            {Object.entries(THEMES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
+        </label>
       </header>
       {starting && (
         <StartDialog

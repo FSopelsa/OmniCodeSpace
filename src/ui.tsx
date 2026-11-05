@@ -51,5 +51,23 @@ export async function post<T = unknown>(url: string, body: unknown): Promise<T> 
   return json
 }
 
-export const button = 'rounded-sm border-[1.5px] border-ink px-3 py-1 text-sm font-semibold disabled:opacity-50'
+export const THEMES = { day: 'Day', night: 'Night', blueprint: 'Blueprint', graphite: 'Graphite' } as const
+export type Theme = keyof typeof THEMES
+const THEME_KEY = 'omni-theme'
+
+// Your last pick, else the system's light or dark setting. Storage can be blocked, and the page works without it.
+export function savedTheme(): Theme {
+  try {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved && saved in THEMES) return saved as Theme
+  } catch {}
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'day'
+}
+
+export function applyTheme(theme: Theme, save = false) {
+  document.documentElement.dataset.theme = theme
+  if (save) try { localStorage.setItem(THEME_KEY, theme) } catch {}
+}
+
+export const button ='rounded-sm border-[1.5px] border-ink px-3 py-1 text-sm font-semibold disabled:opacity-50'
 export const primary = `${button} bg-ink text-sheet`

@@ -20,6 +20,61 @@
   --font-mono: "Overpass Mono", monospace;
 }
 
+/* Dark themes: the same tokens, redefined. Day is the @theme above. */
+[data-theme="night"] {
+  color-scheme: dark;
+  --color-panel: #1a241f;
+  --color-tile: #1f2b25;
+  --color-sheet: #111915;
+  --color-ink: #e3ebe2;
+  --color-ink-2: #9fb0a5;
+  --color-rule: #2f3d36;
+  --color-run: #3ec27f;
+  --color-wait: #f2b52e;
+  --color-stop: #ff6b57;
+  --color-a1: #8ea6ff;
+  --color-a2: #e08ad3;
+  --color-a3: #45c6cf;
+  --color-a4: #cbbd55;
+  --color-since: rgb(242 181 46 / 0.07);
+}
+
+[data-theme="blueprint"] {
+  color-scheme: dark;
+  --color-panel: #142a50;
+  --color-tile: #1a3463;
+  --color-sheet: #0d1f3c;
+  --color-ink: #eef4ff;
+  --color-ink-2: #a8bde0;
+  --color-rule: #2b4677;
+  --color-run: #5ad69a;
+  --color-wait: #ffcc4d;
+  --color-stop: #ff8a75;
+  --color-a1: #7fd6ff;
+  --color-a2: #ffa3e6;
+  --color-a3: #a6f0c6;
+  --color-a4: #ffd88a;
+  --color-since: rgb(255 204 77 / 0.08);
+}
+
+[data-theme="graphite"] {
+  color-scheme: dark;
+  --color-panel: #252320;
+  --color-tile: #2a2825;
+  --color-sheet: #1b1a18;
+  --color-ink: #e6dfd2;
+  --color-ink-2: #a9a295;
+  --color-rule: #3a3732;
+  --color-run: #74c08f;
+  --color-wait: #e3b04b;
+  --color-stop: #ec7a66;
+  --color-a1: #94acec;
+  --color-a2: #cf93c4;
+  --color-a3: #6cc3ba;
+  --color-a4: #c7b467;
+  --color-since: rgb(227 176 75 / 0.07);
+}
+
 body {
   background: var(--color-sheet);
   color: var(--color-ink);
@@ -27,6 +82,8 @@ body {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 2px solid var(--color-ink);
   outline-offset: 2px;
