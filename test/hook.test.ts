@@ -127,6 +127,8 @@ test('enable keeps what was there, can run twice, and leaves no machine path in 
   const claude = readFileSync(join(repo, 'CLAUDE.md'), 'utf8')
   assert.match(claude, /^# Claude rules\n\n## Commit trailers\n[\s\S]* {4}Why: /)
   assert.doesNotMatch(claude, /arrive/)
+  // It doesn't import AGENTS.md, so the to-do note goes in both, once.
+  for (const text of [note, claude]) assert.equal(text.split('## To-do list').length, 2)
 
   assert.match(await git(repo, 'config', '--local', 'alias.omni'), /^!node ".*\/server\/cli\.ts"$/)
   // The settings file is personal, so only the notes show up for review.
@@ -162,6 +164,7 @@ test('enable creates AGENTS.md when a repo has none, and points Claude at it', a
   mkdirSync(fresh)
   await git(fresh, 'init', '-b', 'main')
   await enable(fresh)
+  assert.deepEqual((await enable(fresh)).changed, [])
   assert.match(readFileSync(join(fresh, 'AGENTS.md'), 'utf8'), /^## For agents working here\n/)
   assert.equal(readFileSync(join(fresh, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n')
 })

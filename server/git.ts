@@ -20,6 +20,8 @@ export type Commit = {
 
 export type Worktree = { path: string; branch: string }
 
+export const TODO_FILE = 'TODO.md'
+
 // The sender of an order controls its branch, including any hooks folder it tracks, so the app's own git calls there run no hooks.
 export const NO_HOOKS = ['-c', `core.hooksPath=${devNull}`]
 
@@ -157,6 +159,10 @@ export async function catchup(folder: string, agent: string, from = seenRef(agen
       lines.push(`- ${c.sha.slice(0, 7)} ${subject}${c.agent ? ` [${c.agent}]` : ''}${c.why ? ` Why: ${c.why}` : ''}`)
     }
     if (commits.length > MAX_COMMITS) lines.push(`- and ${commits.length - MAX_COMMITS} older commits`)
+  }
+  if (changedFiles.includes(TODO_FILE)) {
+    const items = (await git(repo, 'diff', '--no-ext-diff', '--no-color', '-U0', base, head, '--', TODO_FILE)).split('\n').filter((l) => /^[+-]\s*[-*] \[[ xX]\] /.test(l))
+    if (items.length) lines.push('', `## To-do changes in ${TODO_FILE}`, 'Others wrote these too.', '```diff', ...items.slice(0, 30), '```')
   }
   if (stat) lines.push('', '## Files changed', '```', stat, '```')
   if (uncommitted) lines.push('', '## Uncommitted in this checkout', '```', uncommitted.split('\n').slice(0, 30).join('\n'), '```')

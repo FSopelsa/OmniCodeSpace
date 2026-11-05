@@ -17,6 +17,11 @@ Codex: at the start of a session, run \`${CODEX_COMMAND}\` once. It prints what 
 
 ${TRAILERS}`
 const CLAUDE_NOTE = `## Commit trailers\n\n${TRAILERS}`
+const TODO_MARK = 'one task per line as `- [ ]'
+const TODO_NOTE = `## To-do list
+
+This project's shared to-do list is \`TODO.md\`, ${TODO_MARK} task\`. When you finish a task on it, tick it as \`- [x]\`. Add work you find but won't do now. Commit the list with the change it belongs to.
+`
 const ORDERS_NOTE = `## Sending work to the owner's PC
 
 To hand a task to an agent on the owner's PC, push a branch named \`omni/orders/<short-id>\` to origin. If your git access only lets you push \`claude/*\` branches, push one of those instead. The branch's newest commit adds \`order.md\`, saying what to do and how, and ends its message with:
@@ -70,7 +75,11 @@ export async function enable(folder: string, opts: { orders?: boolean } = {}) {
   if (addNote(join(repo, 'AGENTS.md'), AGENTS_NOTE, CODEX_COMMAND)) changed.push('AGENTS.md')
   // Claude Code's own AGENTS.md fallback didn't load reliably in testing, while an import from CLAUDE.md did.
   const claudeMd = join(repo, 'CLAUDE.md')
-  if (existsSync(claudeMd) ? addNote(claudeMd, CLAUDE_NOTE, 'Agent: <your tool') : addNote(claudeMd, '@AGENTS.md\n', '@AGENTS.md')) changed.push('CLAUDE.md')
+  // One that imports AGENTS.md already has the rules, as it does from an earlier run.
+  if (existsSync(claudeMd) ? !readFileSync(claudeMd, 'utf8').includes('@AGENTS.md') && addNote(claudeMd, CLAUDE_NOTE, 'Agent: <your tool') : addNote(claudeMd, '@AGENTS.md\n', '@AGENTS.md')) changed.push('CLAUDE.md')
+  // Its own marker, so repos enabled before the to-do list existed get it on the next run.
+  if (addNote(join(repo, 'AGENTS.md'), TODO_NOTE, TODO_MARK) && !changed.includes('AGENTS.md')) changed.push('AGENTS.md')
+  if (!readFileSync(claudeMd, 'utf8').includes('@AGENTS.md') && addNote(claudeMd, TODO_NOTE, TODO_MARK) && !changed.includes('CLAUDE.md')) changed.push('CLAUDE.md')
 
   if (opts.orders) {
     // Untracked, like the alias: only this PC fetches orders.

@@ -6,6 +6,7 @@ import { MapView } from './Map.tsx'
 import { useOrders } from './Orders.tsx'
 import { Roster } from './Roster.tsx'
 import { StartDialog } from './Runs.tsx'
+import { TodoView } from './Todo.tsx'
 import { Tracks } from './Tracks.tsx'
 import { AgentInfo, Names, agentRows } from './parts.tsx'
 import { Lamp, ago, button, count, isLive, modelName, primary, sessionName, useJson } from './ui.tsx'
@@ -240,7 +241,7 @@ function RepoView({ path }: { path: string }) {
   )
 }
 
-const VIEWS = { tracks: 'Tracks', roster: 'Roster', map: 'Map' } as const
+const VIEWS = { tracks: 'Tracks', roster: 'Roster', map: 'Map', todo: 'To-do' } as const
 
 export function App() {
   const { data, error } = useJson<{ roots: string[]; repos: Summary[] }>('/api/repos', 30000)
@@ -299,7 +300,7 @@ export function App() {
             ))}
           </ul>
         </nav>
-        {!current ? <div /> : view === 'map' ? <MapView key={current} path={current} /> : <RepoView key={current} path={current} />}
+        {!current ? <div /> : view === 'map' ? <MapView key={current} path={current} /> : view === 'todo' ? <TodoView key={current} path={current} /> : <RepoView key={current} path={current} />}
       </div>
       )}
     </div>

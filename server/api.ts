@@ -11,6 +11,7 @@ import { allSessions, projectOf, sessionsIn } from './sessions.ts'
 import { answerRun, askRun, listRuns, reviewRun, startRun, stopRun, watchRun } from './runs.ts'
 import { setup } from './setup.ts'
 import { remotes, stack } from './stack.ts'
+import { editTodo, shareTodo, todo } from './todo.ts'
 
 // Made fresh each time the server starts, and put into the page. Every write needs it.
 export const token = randomBytes(24).toString('hex')
@@ -71,6 +72,8 @@ async function route(url: URL) {
       const [built, linked] = await Promise.all([stack(repo), remotes(repo)])
       return { stack: built, remotes: linked }
     }
+    case '/todo':
+      return todo(await knownRepo(path))
     case '/runs':
       return listRuns()
     case '/runs/review':
@@ -91,6 +94,10 @@ async function write(path: string, body: any, req: IncomingMessage) {
     case '/runs':
       // Only these fields: the rest of startRun's options are for orders, set on the server.
       return startRun(await knownRepo(body.repo), { tool: body.tool, task: body.task, model: body.model }, self)
+    case '/todo':
+      return editTodo(await knownRepo(body.repo), body)
+    case '/todo/share':
+      return shareTodo(await knownRepo(body.repo))
     case '/runs/stop':
       return stopRun(body.id)
     case '/runs/answer':

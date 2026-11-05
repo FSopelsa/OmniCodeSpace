@@ -412,6 +412,26 @@ The design is in `docs/superpowers/specs/2026-11-04-orders-design.md`.
    - **How:** an order with `Omni-Ask: <project>` for Claude Code starts by itself, one at a time, in that project's own checkout, with `--restricted --tools Read,Grep,Glob --strict-mcp-config`. A question for Codex waits for a click and runs in Codex's `read-only` sandbox, until that sandbox has had the same real check. Sending the answer back needs your click. The app's own git commands on order branches run no hooks, because the sender controls the branch.
    - **Checked:** a real Haiku question, asked to create a file, run `git status` and describe `README.md`. It created nothing, its Bash call was refused as an unavailable tool, and it answered from `README.md`. To keep the cost down, it was started through the Run path with Haiku. Starting by itself is covered by the tests.
 
+### Shared to-do list *(built 2026-11-05)*
+
+Asked for on 2026-11-05: one to-do list per project, shared by people and agents through git, with a reminder to push edits, and TODO comments in the code included automatically.
+
+- **How:** the list is `TODO.md` at the project root, one GitHub task-list line per item (`- [ ]` and `- [x]`). It reads the same on GitHub, in an editor and to a model, and git merges it line by line. The To-do tab adds, ticks and removes items. Each edit changes one line and leaves headings, notes and line endings alone, and it is refused if that line changed since the page loaded.
+- **Code comments:** `TODO` and `FIXME` right after a comment marker (`//`, `#`, `/*`, `*`, `<!--`, `--`, `;`) in tracked files, found with `git grep` on every load. They're shown, not copied into `TODO.md`, so a removed comment never leaves a stale item behind.
+- **Reminder:** after an edit, the tab says the list is only on this PC and offers **Commit and push**. That commits only `TODO.md`, even with other files staged, then runs a plain `git push` and says how many commits that sends. With no remote branch yet, it commits and tells you the push command.
+- **Agents:** `omni enable` adds a short "To-do list" note to `AGENTS.md`. Running it again adds the note to repos enabled earlier. A returning agent's brief shows the `TODO.md` lines that changed since its last visit, as a diff.
+- **Checked:** tests for edits, stale lines, the comment scan, commit-only-the-list, push, and the brief. In the browser on a scratch repo: added two items, ticked one, then Commit and push reached the scratch remote. A scan of every repo in `IdeaProjects` took under 70 ms per repo and found one real comment. The other hits came from a JSON report, so JSON files are now skipped.
+
+**Ideas, ranked by value for the effort.** Seen in: [Backlog.md](https://github.com/MrLesk/Backlog.md) (Markdown tasks in the repo, a Kanban board and an MCP server for agents, about 3,700 to 5,300 stars depending on the snapshot), [Beads](https://github.com/steveyegge/beads) (Steve Yegge's git-backed tracker for coding agents, with dependencies and a "ready" list), [Task Master](https://github.com/eyaltoledano/claude-task-master) (tasks.json with dependencies, about 20,000 to 25,000 stars in third-party snapshots), Todo Tree for VS Code and IntelliJ's TODO window (comment scanning), and todo-to-issue-action (comments to GitHub issues, not checked).
+
+1. **Give a to-do to an agent.** A button that opens Start an agent with the item as the task, and ticks it when the run's branch is merged. Joins the list to steps 7 to 9.
+2. **To-dos on other branches.** Show items that agent branches added or ticked but haven't merged, read with `git show <branch>:TODO.md`. Nobody else can show this without git.
+3. **No merge conflicts.** `TODO.md merge=union` in `.gitattributes` keeps both sides when two people add at the end at once. The cost: an item edited on both sides appears twice. See decision 8.
+4. **Claim before starting.** `- [ ] Fix login @claude-code`, so two agents don't pick the same item. Beads' "ready" list is the fuller version.
+5. **Promote a comment.** One click turns a code comment into a list item that stays after the comment is gone.
+6. **Newer list on the remote.** The orders fetch already runs every 5 minutes. It could also say when `origin`'s `TODO.md` is newer than yours.
+7. **Later:** a board view, sync with GitHub Issues, priorities and due dates in todo.txt style. Skip an MCP server: agents already edit the file.
+
 ### Later, if it earns it
 
 13. **Move to ACP** for richer control and more LLMs, once the CLI adapters feel limiting.
@@ -430,6 +450,7 @@ Everything has a default, so none of these block step 1.
 5. **Should `seen` refs be shared between machines?** My default: no, each machine tracks its own. Sharing is one push setting if you want it later.
 6. **Open source, and which licence?** My default: MIT, once it's useful. I haven't checked whether the name OmniCodeSpace is taken.
 7. **Which view is home?** My default: Tracks first, then Roster and Map as tabs, as built.
+8. **Merge `TODO.md` by union?** It ends conflicts on the list, at the cost of an occasional duplicate line. My default: not yet. Add it once two people or agents really edit the list at the same time.
 
 ## Hurdles
 
@@ -471,3 +492,4 @@ Everything has a default, so none of these block step 1.
 - **Codex project config:** a repo's `.codex/config.toml` is shown even when Codex wouldn't apply it, which happens when the project isn't trusted.
 - **Small parsers:** frontmatter and TOML are read by small parsers that handle the common forms only. Unusual files may show blank fields.
 - The shaded area in the app always follows the first recorded agent, not the name typed into the catch-up box.
+- **To-do list:** nested items show as a flat list. The tab edits the main checkout's branch only. The comment scan reads tracked files, stops at 200 hits and skips JSON. The reminder knows only what the last fetch knew about the remote.

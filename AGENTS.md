@@ -39,3 +39,7 @@ When you commit, end the message with these two trailer lines, together in its l
 
     Agent: <your tool, and your role if you have one>
     Why: <the reason for the change, in one line>
+
+## To-do list
+
+This project's shared to-do list is `TODO.md`, one task per line as `- [ ] task`. When you finish a task on it, tick it as `- [x]`. Add work you find but won't do now. Commit the list with the change it belongs to.

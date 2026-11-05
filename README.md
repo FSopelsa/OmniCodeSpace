@@ -19,6 +19,7 @@ A local workspace for coding agents and the people running them, with git as the
 - **Map:** one project as the hub of everything that works on it: worktrees, Claude Code, Codex and their agents, remotes. Select a node for its models, plugins, MCP servers, skills, instruction files and tech stack.
 - **Start an agent:** runs Claude Code or Codex on a task in a new branch and folder, streams its output, can stop it, waits for your click before Claude Code pushes, and shows the branch for review.
 - **Orders:** takes tasks that agents elsewhere push as git branches, runs them after your click, and sends a report back on the same branch. Read-only questions about another project start by themselves.
+- **To-do:** one shared list per project in `TODO.md`, for people and agents alike, plus the `TODO` and `FIXME` comments in its code. After an edit, it reminds you to commit and push the list.
 
 ## Requirements
 
@@ -49,8 +50,8 @@ From then on, a new or resumed Claude Code or Codex session in that repo is told
 `enable` makes these changes, and commits nothing:
 
 - **`.claude/settings.local.json`** gets a session-start hook. Existing settings are kept, and the file is excluded from git through `.git/info/exclude`.
-- **`AGENTS.md`** gets a short section with two rules. Codex should run the catch-up at the start of a session, and every agent should end its commit messages with `Agent:` and `Why:` trailers. For anyone without this tool the catch-up command just fails, and the note says to carry on.
-- **`CLAUDE.md`** points Claude Code at those rules. If the repo has no `CLAUDE.md`, one is created holding just `@AGENTS.md`. If it has one, the trailer rule is added to it.
+- **`AGENTS.md`** gets a short section with two rules. Codex should run the catch-up at the start of a session, and every agent should end its commit messages with `Agent:` and `Why:` trailers. For anyone without this tool the catch-up command just fails, and the note says to carry on. A second section points agents at the shared to-do list in `TODO.md`.
+- **`CLAUDE.md`** points Claude Code at those rules. If the repo has no `CLAUDE.md`, one is created holding just `@AGENTS.md`. If it has one that doesn't import `AGENTS.md`, the trailer rule and the to-do note are added to it.
 - **The repo's own git config** gets an alias, `git omni`. It's the only place that holds the path to this tool, so tracked files stay free of machine-specific paths.
 
 Review `AGENTS.md` and `CLAUDE.md`, and commit them if you want to keep the rules.
@@ -140,13 +141,28 @@ Omni-Status: open
 
 **Leftovers.** Merging an order branch brings its `order.md` and `report.md` along. Order folders stay until you remove them with `git worktree remove <folder>`. To drop an order, delete its branch on the remote.
 
+## The to-do list
+
+Each project has one to-do list, `TODO.md` at its root, shared through git like any other file. Each item is a GitHub task-list line:
+
+```markdown
+- [ ] Add a checkout page
+- [x] Fix the login redirect
+```
+
+- **In the app.** The **To-do** tab adds, ticks and removes items. The first item creates the file. Each edit changes one line and keeps everything else in the file, such as headings and notes. If the line changed since the page loaded, the edit is refused and the list reloads.
+- **Sharing.** After an edit, the tab says the list is only on this PC. **Commit and push** commits `TODO.md` alone, even if other files are staged, then pushes the branch the way `git push` would. Any other commits on the branch go along, and the reminder says how many. If the branch isn't on a remote yet, it commits and tells you the push command.
+- **Agents.** `enable` tells agents in `AGENTS.md` to tick what they finish, add what they find, and commit the list with their change. A returning agent's catch-up brief shows which items changed since its last visit.
+- **Code comments.** The tab also lists `TODO` and `FIXME` comments from the project's tracked files, read live with `git grep`. They aren't copied into `TODO.md`, so removing the comment removes the item. A tag counts only right after a comment marker such as `//`, `#`, `/*` or `<!--`. JSON files are skipped.
+- **Conflicts.** Two people adding at the end of the list at once is an ordinary merge conflict. Keep both lines.
+
 ## Data and privacy
 
 - Everything stays on your computer unless you push it. There are no accounts, no telemetry and no cloud service. Send back pushes an order's branch, including its `report.md` with this PC's name, the agent's last message and, for a question, what it read in the other project.
 - The server listens on `127.0.0.1` and refuses requests from other hosts and from other websites. Anything that writes needs a token that is made each time the server starts and is put into the page.
 - Session logs can contain anything you or an agent typed, including secrets. The app shows their metadata (title, model, branch, folder, tokens), never the conversation.
 - To show what agents can touch, the app reads Claude Code's and Codex's settings files. MCP servers appear by name only. Their commands, arguments and environment values, where keys often live, never reach the browser.
-- The web app writes when you start an agent: it adds a branch and a worktree folder, and runs the tool there. In repos with orders turned on, it also fetches order branches from `origin`, starts questions, commits each order's `report.md`, and pushes an order branch when you click Send back. The command line writes too: `enable` makes the changes listed above, and `seen`, `arrive` and `hook` move refs under `refs/omni/`.
+- The web app writes when you start an agent: it adds a branch and a worktree folder, and runs the tool there. The To-do tab writes `TODO.md`, and commits and pushes it when you click. In repos with orders turned on, it also fetches order branches from `origin`, starts questions, commits each order's `report.md`, and pushes an order branch when you click Send back. The command line writes too: `enable` makes the changes listed above, and `seen`, `arrive` and `hook` move refs under `refs/omni/`.
 - Remote URLs are shown without any login they contain.
 - Briefs go into the agent's conversation, so whichever model provider that tool uses receives them, as it does everything else in the session.
 
@@ -169,8 +185,9 @@ npm run check
 - `server/stack.ts`: what a project is built with, and its remotes.
 - `server/runs.ts`: starts, streams, stops and reviews agent runs. `server/gate.ts` is the hook that holds a push for your approval.
 - `server/orders.ts`: fetches, lists, runs and sends back orders and questions from other agents.
+- `server/todo.ts`: reads and edits `TODO.md`, finds to-do comments in the code, and commits and pushes the list.
 - `server/api.ts`: the local API.
 - `server/cli.ts`: the command line.
 - `server/enable.ts`: turns on automatic catch-up for a repo.
-- `src/`: the React interface, with the Tracks, Roster and Map views. `lanes.ts` places commits on tracks, `roster.ts` lays out the day.
+- `src/`: the React interface, with the Tracks, Roster, Map and To-do views. `lanes.ts` places commits on tracks, `roster.ts` lays out the day.
 - `docs/PLAN.md`: research, decisions and next steps.
