@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix the items under "Rough edges in the scaffold" and "Hurdles" in `docs/PLAN.md` that code can fix, grouped so that each change fixes several items in the same files.
+**Goal:** Fix the items under "Rough edges in the scaffold" and "Hurdles" in `docs/PLAN.md` that code can fix, planned out and implemented so that some changes fixes several items in the same files.
 
 **Architecture:** Eight tasks, each owning one or two files, and each closing two to four items. Runs get a small on-disk record in the repo's own git folder, which makes them survive restarts and lets the app remove their folders. Session logs gain a "turn over" flag, which gives lamps a third state and a count of unreadable logs. The catch-up brief returns its exact commits, which fixes both shading problems in Tracks. The rest are small changes in `setup.ts`, `enable.ts`, `orders.ts` and `git.ts`.
 
