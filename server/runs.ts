@@ -57,7 +57,7 @@ export function command(tool: Tool, model: string, readOnly = false): [string, s
     // Network off, so a Codex agent can't push. Its sandbox also keeps .git read-only, so its work stays uncommitted for review.
     return [codexBin(), ['exec', '--json', '-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=false', ...(model ? ['-m', model] : []), '-']]
   }
-  const gate = { hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: `node "${GATE}"`, timeout: 600 }] }] } }
+  const gate = { hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell|mcp__.*', hooks: [{ type: 'command', command: `node "${GATE}"`, timeout: 600 }] }] } }
   // Committing only touches the run's own branch, and the review needs commits to show.
   const commits = ['Bash(git add:*)', 'Bash(git commit:*)', 'PowerShell(git add:*)', 'PowerShell(git commit:*)']
   return [process.env.OMNI_CLAUDE ?? 'claude', ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--allowedTools', ...commits, '--settings', JSON.stringify(gate), ...(model ? ['--model', model] : [])]]

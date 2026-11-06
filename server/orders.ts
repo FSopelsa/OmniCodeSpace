@@ -172,6 +172,9 @@ export async function sendOrder(repo: string, branch: string, repos: string[]) {
   return { pushed: await git(repo, 'rev-parse', `refs/heads/${branch}`) }
 }
 
+// Held while a question starts, so two checks at once (two tabs, or Check now during the timer) can't start two.
+let asking = false
+
 export async function checkOrders({ repos, api, now = false, cmd }: { repos: string[]; api: string; now?: boolean; cmd?: [string, string[]] }) {
   const on = (await Promise.all(repos.map(async (r) => ((await ordersOn(r)) ? r : '')))).filter(Boolean)
   await Promise.all(on.filter((r) => now || Date.now() - (lastFetch.get(r) ?? 0) > FETCH_MS).map(fetchOrders))
@@ -179,12 +182,15 @@ export async function checkOrders({ repos, api, now = false, cmd }: { repos: str
   // Questions start without a click, one at a time, so they can't pile up on your usage.
   // shortcut: only Claude Code questions, since its read-only flags were checked for real here. Add Codex after the same check.
   const question = orders.find((o) => o.state === 'open' && o.ask && o.to === 'Claude Code')
-  if (question && !listRuns().some((r) => r.order?.ask && (r.status === 'running' || r.status === 'waiting'))) {
+  if (question && !asking && !listRuns().some((r) => r.order?.ask && (r.status === 'running' || r.status === 'waiting'))) {
+    asking = true
     try {
       Object.assign(question, { state: 'running', run: (await runOrder(question.repo, question.branch, { tool: question.to, sha: question.sha }, { repos, api, cmd })).id })
     } catch (e) {
       failed.set(question.sha, (e as Error).message)
       Object.assign(question, { state: 'blocked', note: (e as Error).message })
+    } finally {
+      asking = false
     }
   }
   const errors = on.flatMap((r) => (fetchErrors.has(r) ? [{ project: basename(r), error: fetchErrors.get(r)! }] : []))

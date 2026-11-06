@@ -171,6 +171,22 @@ test('a question to a project with orders on starts by itself, read-only, once a
   await until(next.run!, (r) => r.status === 'finished')
 })
 
+test('two checks at once still start only one question', async () => {
+  await push('omni/orders/q-6', 'One?', 'Omni-Status: open', 'Omni-Ask: docs')
+  await push('omni/orders/q-7', 'Two?', 'Omni-Status: open', 'Omni-Ask: docs')
+  const read: [string, string[]] = [process.execPath, [agent, 'read']]
+  const both = await Promise.all([checkOrders({ repos, api, now: true, cmd: read }), checkOrders({ repos, api, now: true, cmd: read })])
+  const mine = both.flatMap((c) => c.orders).filter((o) => ['omni/orders/q-6', 'omni/orders/q-7'].includes(o.branch))
+  const runs = mine.filter((o) => o.run)
+  assert.equal(new Set(runs.map((o) => o.run)).size, 1)
+  // The losing check must not mark the question as failed, which would block it until a restart.
+  assert.deepEqual(mine.filter((o) => o.state === 'blocked').map((o) => o.note), [])
+  await until(runs[0].run!, (r) => r.status === 'finished')
+  // Let the other one run too, so later tests start with no question open.
+  const rest = (await checkOrders({ repos, api, now: true, cmd: read })).orders.find((o) => ['omni/orders/q-6', 'omni/orders/q-7'].includes(o.branch) && o.state === 'running')
+  if (rest) await until(rest.run!, (r) => r.status === 'finished')
+})
+
 test('a question whose report commit fails is not started again', async () => {
   await push('omni/orders/q-4', 'Anything?', 'Omni-Status: open', 'Omni-Ask: docs')
   // Hooks don't run on order branches, so a date git refuses makes the commit fail instead.
