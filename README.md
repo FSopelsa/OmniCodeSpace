@@ -103,7 +103,7 @@ Select **Start an agent**, pick a project and a tool, and describe the task. The
 
 The app finds `claude` on your PATH, and Codex inside the Codex desktop app's folder or on your PATH. Set `OMNI_CLAUDE` or `OMNI_CODEX` to use other copies. Runs use your own login for each tool. Anthropic's terms don't clearly say whether scripting Claude Code with a subscription is allowed, so read them yourself, and see the hurdles in [docs/PLAN.md](docs/PLAN.md).
 
-The push check is a guardrail against mistakes, not a sandbox. It reads the command an agent runs, so a push from inside a script isn't caught.
+The push check is a guardrail against mistakes, not a sandbox. It reads the shell command an agent runs, and the names of MCP tools that write to a remote repo, such as GitHub's `push_files`. A push from inside a script isn't caught. Any program on this PC can also read the page's token, so an agent whose permission rules let it run `curl` could approve its own push.
 
 ## Orders from agents elsewhere
 

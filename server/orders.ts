@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { basename, join } from 'node:path'
-import { NO_HOOKS, git, rev } from './git.ts'
+import { NO_HOOKS, REJECTED, failure, git, rev } from './git.ts'
 import { listRuns, startRun, type Run, type Tool } from './runs.ts'
 
 // Every segment starts with a letter or digit, because the name becomes a folder name and a git argument.
@@ -31,7 +31,6 @@ export type Order = {
 }
 
 const ordersOn = (repo: string) => git(repo, 'config', '--get', 'omni.orders').then((v) => v === 'true', () => false)
-const failure =(e: any) => String(e.stderr || e.message).trim()
 
 const fetchErrors = new Map<string, string>()
 const lastFetch = new Map<string, number>()
@@ -167,7 +166,7 @@ export async function sendOrder(repo: string, branch: string, repos: string[]) {
     await git(repo, 'push', 'origin', `refs/heads/${branch}:refs/heads/${branch}`)
   } catch (e) {
     const message = failure(e)
-    throw new Error(/rejected|non-fast-forward|fetch first/.test(message) ? 'The branch moved on GitHub since this PC worked on it. Check for orders again.' : message)
+    throw new Error(REJECTED.test(message) ? 'The branch moved on GitHub since this PC worked on it. Check for orders again.' : message)
   }
   return { pushed: await git(repo, 'rev-parse', `refs/heads/${branch}`) }
 }

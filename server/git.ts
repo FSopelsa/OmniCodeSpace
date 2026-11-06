@@ -33,6 +33,10 @@ export async function git(repo: string, ...args: string[]) {
   return stdout.trimEnd()
 }
 
+// git's own message for a failed command, and how a push refused because the remote moved on reads.
+export const failure = (e: any) => String(e.stderr || e.message).trim()
+export const REJECTED = /rejected|non-fast-forward|fetch first/
+
 export const rev = (repo: string, ref: string) => git(repo, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`).catch(() => '')
 
 const AGENT_NAME = /^[A-Za-z0-9]+([._-][A-Za-z0-9]+)*$/

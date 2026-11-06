@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { TODO_FILE, git } from './git.ts'
+import { REJECTED, TODO_FILE, failure, git } from './git.ts'
 
 export type Item = { line: number; done: boolean; text: string }
 export type CodeTodo = { file: string; line: number; tag: string; text: string }
@@ -95,9 +95,9 @@ export async function shareTodo(repo: string) {
   if (!upstream) throw new Error(`Committed. This branch isn't on a remote yet, so push it once yourself: git push -u origin ${branch}`)
   try {
     await git(repo, 'push')
-  } catch (e: any) {
-    const message = String(e.stderr || e.message).trim()
-    throw new Error(/rejected|non-fast-forward|fetch first/.test(message) ? `Committed, but ${upstream} has newer commits. Pull them, then push again.` : message)
+  } catch (e) {
+    const message = failure(e)
+    throw new Error(REJECTED.test(message) ? `Committed, but ${upstream} has newer commits. Pull them, then push again.` : message)
   }
   return todo(repo)
 }
