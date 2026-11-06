@@ -35,6 +35,8 @@ Never cut: validation at trust boundaries, error handling that prevents data los
 
 Codex: at the start of a session, run `git omni arrive --agent codex` once. It prints what changed in this repo since you last looked, or nothing if nothing did. If the command fails, carry on.
 
+Deliver your work to the owner's local checkout, never straight to the remote: leave it uncommitted or on a local branch so they can review and merge it. Push only after they have merged it and ask you to. An agent without the local checkout (a cloud session) pushes only its own work branch, never `main`.
+
 When you commit, end the message with these two trailer lines, together in its last paragraph, so the next agent knows who changed what and why:
 
     Agent: <your tool, and your role if you have one>

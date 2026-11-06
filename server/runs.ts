@@ -164,7 +164,7 @@ export async function startRun(repo: string, opts: StartOptions, api: string, cm
   const [bin, args] = cmd ?? command(tool, model, Boolean(order?.ask))
   // The agent gets a key that can only ask for approval. Approving needs the page's token, which it isn't given,
   // though any program on this PC can read it from the page, so an agent allowed to run curl could approve itself.
-  const env = { ...process.env, OMNI_API: api, OMNI_RUN: id, OMNI_ASK_KEY: live.key }
+  const env = { ...process.env, ...(process.env.OMNI_PROXY && { ANTHROPIC_BASE_URL: process.env.OMNI_PROXY }), OMNI_API: api, OMNI_RUN: id, OMNI_ASK_KEY: live.key }
   const child = spawn(bin, args, { cwd: opts.cwd ?? worktree, env, windowsHide: true, detached: process.platform !== 'win32' })
   live.child = child
   // If the tool never started, writing the task fails too, and the error event already reports why.
