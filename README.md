@@ -1,6 +1,22 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/readme-hero-dark.svg">
+  <img src="docs/readme-hero-light.svg" width="100%" alt="OmniCodeSpace: every coding agent, on one track. Claude Code, Codex, cloud agents and you each run on a line into OmniCodeSpace on your machine, which reads and writes your git repos, the agents' session logs and TODO.md.">
+</picture>
+
 # OmniCodeSpace
 
 A local workspace for coding agents and the people running them, with git as the shared memory. It shows your projects as track diagrams, shows which Claude Code and Codex sessions have worked on them, tells a returning agent what changed since it last looked, and starts agents in their own branches with your approval before they push.
+
+**`127.0.0.1`** listens only on this computer · **0** accounts, telemetry or cloud service · **5 views** Tracks, Roster, Map, To-do, Data
+
+### Four lines into one hub
+
+| | Line | What it does |
+|---|---|---|
+| 🟠 | **Claude Code** | A new or resumed session is told what changed since it last looked: commits, changed files, uncommitted work and unmerged branches. A quiet repo costs no tokens. |
+| 🟢 | **Codex** | Gets the same brief through `AGENTS.md`. Runs started here use its sandbox with the network off, so changes stay uncommitted for your review. |
+| 🔵 | **Cloud agents** | Push an order as a git branch. You approve it here, an agent on this PC runs it, and the report goes back on the same branch. |
+| 🟣 | **You** | Start an agent on its own branch and folder. When Claude Code tries to push, the run waits for Allow push or Refuse. |
 
 ![OmniCodeSpace showing a project's branches as tracks](docs/prototypes/scaffold-demo.png)
 
