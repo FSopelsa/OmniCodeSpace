@@ -1,8 +1,7 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type ViteDevServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwind from '@tailwindcss/vite'
 import { api, token } from './server/api.ts'
-
 export default defineConfig({
   server: { host: '127.0.0.1' },
   plugins: [
@@ -12,8 +11,8 @@ export default defineConfig({
       name: 'omni-api',
       // shortcut: the API only runs inside the Vite dev server, move it to node:http when the app gets packaged.
       // This runs ahead of Vite's own middleware, so api.ts does its own host check.
-      configureServer: (server) => void server.middlewares.use('/api', api),
-      transformIndexHtml: (html) => html.replace('</head>', `<meta name="omni-token" content="${token}"></head>`),
+      configureServer: (server: ViteDevServer) => void server.middlewares.use('/api', api),
+      transformIndexHtml: (html: string) => html.replace('</head>', `<meta name="omni-token" content="${token}"></head>`),
     },
   ],
 })
