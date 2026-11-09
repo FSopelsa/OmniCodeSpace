@@ -71,6 +71,9 @@ test('matches folders whatever the slash direction or case, and not by name pref
   assert.deepEqual(sessionsIn(sessions, ['c:/work/shop']).map((s) => s.id), ['agent-a1', 'claude-1'])
   assert.deepEqual(sessionsIn(sessions, ['C:\\Work\\Shop\\']).map((s) => s.id), ['agent-a1', 'claude-1'])
   assert.deepEqual(sessionsIn(sessions, ['C:/Work/Sho']), [])
+  // A worktree git no longer lists still counts for its repo.
+  const gone = { ...sessions[0], cwd: 'C:\\Work\\Shop.worktrees\\gone' }
+  assert.deepEqual(sessionsIn([gone], ['c:/work/shop']), [gone])
 })
 
 test('names the project a session belonged to, including worktrees this app starts beside it', () => {

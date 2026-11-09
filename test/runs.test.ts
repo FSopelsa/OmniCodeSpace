@@ -86,6 +86,9 @@ test('turns Claude Code and Codex output into readable lines', () => {
   assert.deepEqual(describe('Codex', JSON.stringify({ type: 'item.completed', item: { type: 'file_change', changes: [{ path: 'a.ts' }, { path: 'b.ts' }] } })), [{ kind: 'tool', text: 'Changed a.ts, b.ts' }])
   assert.deepEqual(describe('Codex', JSON.stringify({ type: 'turn.started' })), [])
   assert.deepEqual(describe('Claude Code', ''), [])
+  // Shapes the code doesn't expect must not throw: a throw here stops the server.
+  assert.deepEqual(describe('Codex', 'null'), [{ kind: 'note', text: 'null' }])
+  assert.equal(describe('Claude Code', JSON.stringify({ type: 'user', message: { role: 'user', content: 'Look at x' } }))[0].kind, 'note')
 })
 
 test('a read-only run says so when it starts', () => {

@@ -65,12 +65,15 @@ export function command(tool: Tool, model: string, readOnly = false): [string, s
 
 // Turns one line of a tool's JSON output into what the app shows. Lines it doesn't know are skipped.
 export function describe(tool: Tool, line: string): Line[] {
-  let e: any
+  // This runs in a stream handler, where a throw stops the whole server, so any line it can't read becomes a note.
   try {
-    e = JSON.parse(line)
+    return linesOf(tool, JSON.parse(line))
   } catch {
     return line.trim() ? [{ kind: 'note', text: short(line) }] : []
   }
+}
+
+function linesOf(tool: Tool, e: any): Line[] {
   if (tool === 'Codex') {
     const item = e.item ?? {}
     if (e.type === 'item.completed' && item.type === 'agent_message') return [{ kind: 'say', text: item.text }]

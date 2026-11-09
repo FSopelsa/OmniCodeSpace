@@ -195,6 +195,7 @@ export function sessionsIn(sessions: Session[], folders: string[]) {
   const roots = folders.map(normal)
   return sessions.filter((s) => {
     const cwd = normal(s.cwd)
-    return roots.some((r) => cwd === r || cwd.startsWith(`${r}/`))
+    // <repo>.worktrees counts even after git stops listing a removed worktree, as in projectOf.
+    return roots.some((r) => cwd === r || cwd.startsWith(`${r}/`) || cwd.startsWith(`${r}.worktrees/`))
   })
 }

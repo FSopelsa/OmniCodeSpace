@@ -152,7 +152,7 @@ export async function runOrder(repo: string, branch: string, opts: { tool: strin
     // A question runs in the other project's own checkout, and can only read there.
     const cwd = order.ask ? ctx.repos.find((r) => basename(r) === order.ask) : undefined
     const task = framed(order)
-    return await startRun(repo, { tool: opts.tool, model: opts.model, task, branch, from: `refs/remotes/origin/${branch}`, order: { branch, ask: order.ask }, onEnd: report(order), cwd }, ctx.api, ctx.cmd)
+    return await startRun(repo, { tool: opts.tool, model: opts.model, task, branch, from: order.sha, order: { branch, ask: order.ask }, onEnd: report(order), cwd }, ctx.api, ctx.cmd)
   } finally {
     starting.delete(key)
   }
