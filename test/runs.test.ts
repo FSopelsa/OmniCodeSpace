@@ -98,7 +98,7 @@ test('a read-only run says so when it starts', () => {
 test('Codex runs get no network, and Claude runs get the push gate', () => {
   assert.ok(command('Codex', '')[1].includes('sandbox_workspace_write.network_access=false'))
   const claude = command('Claude Code', 'haiku')[1]
-  assert.match(claude[claude.indexOf('--settings') + 1], /PreToolUse.*Bash\|PowerShell.*gate\.ts/)
+  assert.match(claude[claude.indexOf('--settings') + 1], /PreToolUse.*Bash\|PowerShell\|mcp__\.\*.*gate\.ts/)
   assert.deepEqual(claude.slice(-2), ['--model', 'haiku'])
   assert.ok(claude.includes('Bash(git commit:*)') && !claude.some((a) => /push/.test(a) && !a.includes('gate')))
 })
@@ -170,6 +170,13 @@ test('the gate has no opinion on other commands, and refuses when the app is unr
   assert.equal(gate('git status').stdout, '')
   assert.match(gate('cd x && git -C . push --force', { OMNI_API: 'http://127.0.0.1:9/api' }).stdout, /"permissionDecision":"deny"/)
   assert.equal(spawnSync(process.execPath, [GATE], { input: 'not json', encoding: 'utf8' }).status, 0)
+})
+
+test('the gate also holds MCP tools that write to a remote repo', () => {
+  const mcp = (tool_name: string) => spawnSync(process.execPath, [GATE], { input: JSON.stringify({ tool_name, tool_input: { owner: 'o' } }), encoding: 'utf8', env: { ...process.env, OMNI_API: 'http://127.0.0.1:9/api' } }).stdout
+  assert.match(mcp('mcp__claude_ai_github__push_files'), /"permissionDecision":"deny"/)
+  assert.match(mcp('mcp__github__merge_pull_request'), /"permissionDecision":"deny"/)
+  assert.equal(mcp('mcp__github__list_issues'), '')
 })
 
 test('starting a run checks its input, and needs the token', async () => {

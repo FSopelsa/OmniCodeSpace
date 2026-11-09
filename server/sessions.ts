@@ -22,6 +22,19 @@ export type Session = {
   // The agent definition this run worked as, if any, and the session that started it, for a subagent.
   agent: string
   parent: string
+  // The plan usage Codex logged most recently in this session.
+  limits?: Limits
+}
+
+// used is a percentage; resets is in Unix seconds, 0 when unknown.
+export type Limit = { used: number; minutes: number; resets: number }
+export type Limits = { at: string; windows: Limit[] }
+
+// Codex logs used_percent and Claude Code used_percentage. Out-of-range readings are dropped, never shown as full.
+function limit(w: any, minutes: number): Limit[] {
+  const used = w?.used_percent ?? w?.used_percentage
+  if (typeof used !== 'number' || !(used >= 0 && used <= 100)) return []
+  return [{ used, minutes: w.window_minutes > 0 ? w.window_minutes : minutes, resets: w.resets_at > 0 ? w.resets_at : 0 }]
 }
 
 // shortcut: both log formats are internal to their tools and can change with any update, so unknown lines are skipped.
@@ -100,6 +113,12 @@ export async function readCodex(file: string, titles: Map<string, string> = new 
       const u = p.info.total_token_usage
       s.tokens = { input: (u.input_tokens ?? 0) - (u.cached_input_tokens ?? 0), cached: u.cached_input_tokens ?? 0, output: u.output_tokens ?? 0 }
     }
+    // Other limit ids are separate buckets, not the plan's own windows.
+    const rl = p?.type === 'token_count' ? p.rate_limits : undefined
+    if (e.type === 'event_msg' && rl && (rl.limit_id ?? 'codex') === 'codex' && e.timestamp) {
+      const windows = [...limit(rl.primary, 300), ...limit(rl.secondary, 10080)]
+      if (windows.length) s.limits = { at: e.timestamp, windows }
+    }
   })
   s.title = titles.get(s.id) ?? ''
   return s
@@ -141,6 +160,23 @@ export async function allSessions(home = homedir()) {
     ...codex.map((f) => read(f, (x) => readCodex(x, titles))),
   ])
   return results.flatMap((r) => (r.status === 'fulfilled' && r.value.cwd ? [r.value] : [])).sort((a, b) => b.last.localeCompare(a.last))
+}
+
+// The newest Codex reading in any log.
+export const codexLimits = (sessions: Session[]) =>
+  sessions.reduce<Limits | null>((best, s) => (s.limits && (!best || s.limits.at > best.at) ? s.limits : best), null)
+
+// TokenUsageTracker's status-line bridge keeps the latest Claude Code allowances here. Null when it isn't set up.
+export async function claudeLimits(home = homedir()): Promise<Limits | null> {
+  const file = join(process.env.CLAUDE_CONFIG_DIR || join(home, '.claude'), 'usage-widget', 'usage.json')
+  try {
+    const data = JSON.parse(await readFile(file, 'utf8'))
+    const at = new Date(data.received_at)
+    const windows = [...limit(data.rate_limits?.five_hour, 300), ...limit(data.rate_limits?.seven_day, 10080)]
+    return isNaN(at.getTime()) || !windows.length ? null : { at: at.toISOString(), windows }
+  } catch {
+    return null
+  }
 }
 
 export const normal = (p: string) => p.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()

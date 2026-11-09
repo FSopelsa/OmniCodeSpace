@@ -10,7 +10,7 @@ declare global {
 }
 
 import type { Commit, Worktree } from '../server/git.ts'
-import type { Session } from '../server/sessions.ts'
+import type { Limits, Session } from '../server/sessions.ts'
 import type { AgentDef, Named, Setup } from '../server/setup.ts'
 import { DataView } from './Data.tsx'
 import { MapView } from './Map.tsx'
@@ -252,6 +252,30 @@ function RepoView({ path }: { path: string }) {
   )
 }
 
+const span = (minutes: number) => (minutes % 1440 ? `${minutes / 60}h` : `${minutes / 1440}d`)
+const resetTime = (seconds: number) => new Date(seconds * 1000).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+// What's left of each plan window, as last reported. A window whose reset has passed shows a dash until a new reading arrives.
+function PlanLeft() {
+  const { data } = useJson<{ codex: Limits | null; claude: Limits | null }>('/api/plan', 60000)
+  if (!data) return null
+  const now = Date.now() / 1000
+  const tool = (name: string, l: Limits | null, missing: string) => (
+    <span title={l ? l.windows.map((w) => `${span(w.minutes)} resets ${w.resets ? resetTime(w.resets) : 'at an unknown time'}`).join('. ') : missing}>
+      <b>{name}</b>{' '}
+      {l ? l.windows.map((w) => `${span(w.minutes)} ${w.resets && w.resets < now ? '—' : `${Math.round(100 - w.used)}%`}`).join(' · ') : 'no reading'}
+      {l && now - Date.parse(l.at) / 1000 > 3600 && <span className="text-ink-2">, {ago(l.at)}</span>}
+    </span>
+  )
+  return (
+    <p className="flex flex-wrap gap-x-3 text-sm">
+      <span className="text-ink-2">Plan left</span>
+      {tool('Codex', data.codex, 'No Codex log on this PC has reported plan usage yet.')}
+      {tool('Claude', data.claude, "Choose Set up Claude usage in TokenUsageTracker's options, then use Claude Code.")}
+    </p>
+  )
+}
+
 const VIEWS = { tracks: 'Tracks', roster: 'Roster', map: 'Map', todo: 'To-do', data: 'Data' } as const
 
 export function App() {
@@ -277,6 +301,7 @@ export function App() {
             </button>
           ))}
         </nav>
+        <PlanLeft />
         {waiting > 0 && <button onClick={() => setView('roster')} className={`${primary} ml-auto`}>Needs you · {waiting}</button>}
         <button onClick={() => setStarting(true)} disabled={!repos.length} className={`${button} ${waiting > 0 ? '' : 'ml-auto'}`}>Start an agent</button>
         <label className="flex items-center gap-2 text-sm font-semibold">

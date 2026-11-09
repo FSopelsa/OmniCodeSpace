@@ -457,6 +457,8 @@ Asked for on 2026-11-05: visualization tools inside the app, flexible enough for
 - **Checked:** tests for the three row builders. In the browser, Day and Night themes, a 3-day-old project and a 40-commit one. The commit counts matched `git log` (6 by Claude Code and 2 unsigned here, and 14, 12, 3 and 11 a week in the JPA workshop).
 - **Limits:** a session's tokens all count on the day it was last active. Chart specs written by agents aren't accepted yet: before they are, Vega needs a loader that refuses URLs and its CSP-safe expression interpreter.
 
+**Plan left, built 2026-11-05.** A header strip with the share of each subscription window that's left, taken from TokenUsageTracker's sources without its code. Codex: the newest `rate_limits` in any `token_count` line of the logs. Claude Code: the widget's `usage-widget/usage.json`. `GET /api/plan` returns both, and the page polls it every minute. The widget's live Codex query (`codex app-server`, `account/rateLimits/read`), its per-task history and auto-resume stay in the widget. Auto-resume starts work in your chats, so it belongs in a process that stays running. *Checked:* a test for both readers, and in the browser, where both readings matched the files they came from. *Limit:* the Codex reading is only as fresh as the last Codex reply on this PC.
+
 **Next, in order.** Each ends in something you can check.
 
 2. **Make your own chart:** pick any dataset, get a chart chosen from its field types, change x, y, colour and mark, and save the spec.

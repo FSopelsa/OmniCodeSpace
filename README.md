@@ -21,6 +21,7 @@ A local workspace for coding agents and the people running them, with git as the
 - **Orders:** takes tasks that agents elsewhere push as git branches, runs them after your click, and sends a report back on the same branch. Read-only questions about another project start by themselves.
 - **To-do:** one shared list per project in `TODO.md`, for people and agents alike, plus the `TODO` and `FIXME` comments in its code. After an edit, it reminds you to commit and push the list.
 - **Data:** charts of one project's work, from git and the tools' logs: uncached tokens per day by tool, agent-minutes by hour of the week, and commits per week by who made them. Pick a range from 7 days to all time, and open any chart as a table of the same numbers.
+- **Plan left:** the header shows how much of the Codex and Claude Code subscription windows is left, with reset times on hover. Codex readings come from its own logs. Claude readings come from the snapshot that [TokenUsageTracker](https://github.com/FSopelsa/TokenUsageTracker)'s status-line bridge writes to `~/.claude/usage-widget/usage.json`, so Claude shows "no reading" until that bridge is set up. A reading older than an hour shows its age.
 
 ## Requirements
 
@@ -35,6 +36,8 @@ npm install
 ```bash
 npm run dev
 ```
+
+On Windows you can start it with `scripts/omni.ps1` instead. If `OMNI_PROXY` is set, the script first checks that the proxy answers and, if not, starts the `tokless-headroom-proxy` scheduled task when there is one.
 
 Then open http://127.0.0.1:5173. Pick a theme in the header: Day, or the dark themes Night, Blueprint and Graphite. Until you pick one, it follows your system's light or dark setting. It looks in `~/IdeaProjects` by default. To use other folders, set `OMNI_ROOTS` to a list separated by `;` on Windows or `:` elsewhere.
 
@@ -100,9 +103,9 @@ Select **Start an agent**, pick a project and a tool, and describe the task. The
 - **Live output and stop.** The Roster tab lists runs started from here. Select one for its output, a stop button, and, once it ends, its commits and diff.
 - **Cleaning up.** Merge or push the branch yourself when you're happy, then remove the folder with `git worktree remove <folder>`.
 
-The app finds `claude` on your PATH, and Codex inside the Codex desktop app's folder or on your PATH. Set `OMNI_CLAUDE` or `OMNI_CODEX` to use other copies. Runs use your own login for each tool. Anthropic's terms don't clearly say whether scripting Claude Code with a subscription is allowed, so read them yourself, and see the hurdles in [docs/PLAN.md](docs/PLAN.md).
+The app finds `claude` on your PATH, and Codex inside the Codex desktop app's folder or on your PATH. Set `OMNI_CLAUDE` or `OMNI_CODEX` to use other copies. Set `OMNI_PROXY` (for example `http://127.0.0.1:8787`) to send Claude Code's API calls through a local proxy; a Claude Code settings file that defines `ANTHROPIC_BASE_URL` takes precedence, and Codex follows its own `config.toml`. Runs use your own login for each tool. Anthropic's terms don't clearly say whether scripting Claude Code with a subscription is allowed, so read them yourself, and see the hurdles in [docs/PLAN.md](docs/PLAN.md).
 
-The push check is a guardrail against mistakes, not a sandbox. It reads the command an agent runs, so a push from inside a script isn't caught.
+The push check is a guardrail against mistakes, not a sandbox. It reads the shell command an agent runs, and the names of MCP tools that write to a remote repo, such as GitHub's `push_files`. A push from inside a script isn't caught. Any program on this PC can also read the page's token, so an agent whose permission rules let it run `curl` could approve its own push.
 
 ## Orders from agents elsewhere
 

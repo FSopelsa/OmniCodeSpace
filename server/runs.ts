@@ -57,7 +57,7 @@ export function command(tool: Tool, model: string, readOnly = false): [string, s
     // Network off, so a Codex agent can't push. Its sandbox also keeps .git read-only, so its work stays uncommitted for review.
     return [codexBin(), ['exec', '--json', '-s', 'workspace-write', '-c', 'sandbox_workspace_write.network_access=false', ...(model ? ['-m', model] : []), '-']]
   }
-  const gate = { hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell', hooks: [{ type: 'command', command: `node "${GATE}"`, timeout: 600 }] }] } }
+  const gate = { hooks: { PreToolUse: [{ matcher: 'Bash|PowerShell|mcp__.*', hooks: [{ type: 'command', command: `node "${GATE}"`, timeout: 600 }] }] } }
   // Committing only touches the run's own branch, and the review needs commits to show.
   const commits = ['Bash(git add:*)', 'Bash(git commit:*)', 'PowerShell(git add:*)', 'PowerShell(git commit:*)']
   return [process.env.OMNI_CLAUDE ?? 'claude', ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'acceptEdits', '--allowedTools', ...commits, '--settings', JSON.stringify(gate), ...(model ? ['--model', model] : [])]]
@@ -162,8 +162,9 @@ export async function startRun(repo: string, opts: StartOptions, api: string, cm
   runs.set(id, live)
 
   const [bin, args] = cmd ?? command(tool, model, Boolean(order?.ask))
-  // The agent gets a key that can only ask for approval. Approving needs the page's token, which it isn't given.
-  const env = { ...process.env, OMNI_API: api, OMNI_RUN: id, OMNI_ASK_KEY: live.key }
+  // The agent gets a key that can only ask for approval. Approving needs the page's token, which it isn't given,
+  // though any program on this PC can read it from the page, so an agent allowed to run curl could approve itself.
+  const env = { ...process.env, ...(process.env.OMNI_PROXY && { ANTHROPIC_BASE_URL: process.env.OMNI_PROXY }), OMNI_API: api, OMNI_RUN: id, OMNI_ASK_KEY: live.key }
   const child = spawn(bin, args, { cwd: opts.cwd ?? worktree, env, windowsHide: true, detached: process.platform !== 'win32' })
   live.child = child
   // If the tool never started, writing the task fails too, and the error event already reports why.

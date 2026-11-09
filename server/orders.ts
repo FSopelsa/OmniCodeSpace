@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { basename, join } from 'node:path'
-import { NO_HOOKS, git, rev } from './git.ts'
+import { NO_HOOKS, REJECTED, failure, git, rev } from './git.ts'
 import { listRuns, startRun, type Run, type Tool } from './runs.ts'
 
 // Every segment starts with a letter or digit, because the name becomes a folder name and a git argument.
@@ -31,7 +31,6 @@ export type Order = {
 }
 
 const ordersOn = (repo: string) => git(repo, 'config', '--get', 'omni.orders').then((v) => v === 'true', () => false)
-const failure =(e: any) => String(e.stderr || e.message).trim()
 
 const fetchErrors = new Map<string, string>()
 const lastFetch = new Map<string, number>()
@@ -167,10 +166,13 @@ export async function sendOrder(repo: string, branch: string, repos: string[]) {
     await git(repo, 'push', 'origin', `refs/heads/${branch}:refs/heads/${branch}`)
   } catch (e) {
     const message = failure(e)
-    throw new Error(/rejected|non-fast-forward|fetch first/.test(message) ? 'The branch moved on GitHub since this PC worked on it. Check for orders again.' : message)
+    throw new Error(REJECTED.test(message) ? 'The branch moved on GitHub since this PC worked on it. Check for orders again.' : message)
   }
   return { pushed: await git(repo, 'rev-parse', `refs/heads/${branch}`) }
 }
+
+// Held while a question starts, so two checks at once (two tabs, or Check now during the timer) can't start two.
+let asking = false
 
 export async function checkOrders({ repos, api, now = false, cmd }: { repos: string[]; api: string; now?: boolean; cmd?: [string, string[]] }) {
   const on = (await Promise.all(repos.map(async (r) => ((await ordersOn(r)) ? r : '')))).filter(Boolean)
@@ -179,12 +181,15 @@ export async function checkOrders({ repos, api, now = false, cmd }: { repos: str
   // Questions start without a click, one at a time, so they can't pile up on your usage.
   // shortcut: only Claude Code questions, since its read-only flags were checked for real here. Add Codex after the same check.
   const question = orders.find((o) => o.state === 'open' && o.ask && o.to === 'Claude Code')
-  if (question && !listRuns().some((r) => r.order?.ask && (r.status === 'running' || r.status === 'waiting'))) {
+  if (question && !asking && !listRuns().some((r) => r.order?.ask && (r.status === 'running' || r.status === 'waiting'))) {
+    asking = true
     try {
       Object.assign(question, { state: 'running', run: (await runOrder(question.repo, question.branch, { tool: question.to, sha: question.sha }, { repos, api, cmd })).id })
     } catch (e) {
       failed.set(question.sha, (e as Error).message)
       Object.assign(question, { state: 'blocked', note: (e as Error).message })
+    } finally {
+      asking = false
     }
   }
   const errors = on.flatMap((r) => (fetchErrors.has(r) ? [{ project: basename(r), error: fetchErrors.get(r)! }] : []))
