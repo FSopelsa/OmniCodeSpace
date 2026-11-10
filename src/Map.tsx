@@ -199,7 +199,7 @@ export function MapView({ path }: { path: string }) {
           <text x="586" y="376" fontSize="20" fontWeight="800" fill="var(--color-ink)">Other machines</text>
 
           <Branch id="worktrees" y={100} color="var(--color-a1)" label="Worktrees" sub={others.length === 1 ? '1 beside main' : `${others.length} beside main`} leaves={others.map((w) => ({ id: `wt:${w.path}`, label: w.branch || 'detached', sub: w.path.split(/[\\/]/).pop() ?? '', live: false }))} selected={selected} onSelect={setSelected} />
-          <Branch id="tool:Claude Code" y={250} color="var(--color-a2)" label="Claude Code" sub={toolSub('Claude Code')} leaves={leavesOf('Claude Code')} live={top.some((s) => s.tool === 'Claude Code' && isLive(s))} selected={selected} onSelect={setSelected} />
+          <Branch id="tool:Claude Code" y={250} color="var(--color-claude)" label="Claude Code" sub={toolSub('Claude Code')} leaves={leavesOf('Claude Code')} live={top.some((s) => s.tool === 'Claude Code' && isLive(s))} selected={selected} onSelect={setSelected} />
           <Branch id="tool:Codex" y={410} color="var(--color-a3)" label="Codex" sub={toolSub('Codex')} leaves={leavesOf('Codex')} live={top.some((s) => s.tool === 'Codex' && isLive(s))} selected={selected} onSelect={setSelected} />
           <Branch id="local" y={565} color="var(--color-a4)" label="Local models" sub="step 10" leaves={[]} dim selected={selected} onSelect={setSelected} />
 

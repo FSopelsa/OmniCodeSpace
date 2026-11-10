@@ -11,7 +11,7 @@ const W = 1440
 const LEFT = 240
 const TOP = 40
 const ROW = 34
-const TOOL_COLOR: Record<string, string> = { 'Claude Code': 'var(--color-a2)', Codex: 'var(--color-a3)' }
+const TOOL_COLOR: Record<string, string> = { 'Claude Code': 'var(--color-claude)', Codex: 'var(--color-a3)' }
 const when = (d?: Date) => d?.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 
 function Timetable({ rows, day }: { rows: Row[]; day: Date }) {

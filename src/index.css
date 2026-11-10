@@ -15,6 +15,7 @@
   --color-a2: #8a2a7e;
   --color-a3: #0e7c86;
   --color-a4: #6f6410;
+  --color-claude: #c25a1c;
   --color-since: rgb(224 161 0 / 0.2);
   --font-sans: "Overpass Variable", system-ui, sans-serif;
   --font-mono: "Overpass Mono", monospace;
@@ -36,6 +37,7 @@
   --color-a2: #e08ad3;
   --color-a3: #45c6cf;
   --color-a4: #cbbd55;
+  --color-claude: #e0803f;
   --color-since: rgb(242 181 46 / 0.07);
 }
 
@@ -54,6 +56,7 @@
   --color-a2: #ffa3e6;
   --color-a3: #a6f0c6;
   --color-a4: #ffd88a;
+  --color-claude: #ffa86b;
   --color-since: rgb(255 204 77 / 0.08);
 }
 
@@ -72,6 +75,7 @@
   --color-a2: #cf93c4;
   --color-a3: #6cc3ba;
   --color-a4: #c7b467;
+  --color-claude: #dd8a55;
   --color-since: rgb(227 176 75 / 0.07);
 }
 
@@ -100,6 +104,10 @@
 body {
   background: var(--color-sheet);
   color: var(--color-ink);
+  /* Faint graph-paper grid, in every theme's own ink colour. */
+  --grid: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 
 button:focus-visible,

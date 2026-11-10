@@ -4,6 +4,8 @@ import type { Result, VisualizationSpec } from 'vega-embed'
 export type Column<T> = { key: keyof T & string; label: string; show?: (value: never) => string }
 
 const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+// A spec can name a theme colour as "var(--…)". It's read at each draw, so it follows the theme.
+const resolved = (spec: object) => JSON.parse(JSON.stringify(spec), (_k, v) => (typeof v === 'string' && v.startsWith('var(--') ? css(v.slice(4, -1)) : v))
 
 // Vega draws with real colour values, so the theme's CSS variables are read each time it draws.
 function theme() {
@@ -44,7 +46,7 @@ export function Chart<T extends object>({ title, note, spec, rows, columns }: { 
     let shown: Result | undefined
     // Vega is large, so it loads with the first chart rather than with the app.
     import('vega-embed')
-      .then(({ default: embed }) => (gone || !box.current ? undefined : embed(box.current, { ...spec, description: title, data: { values: rows } } as VisualizationSpec, { actions: false, renderer: 'svg', config: theme() as never })))
+      .then(({ default: embed }) => (gone || !box.current ? undefined : embed(box.current, { ...resolved(spec), description: title, data: { values: rows } } as VisualizationSpec, { actions: false, renderer: 'svg', config: theme() as never })))
       .then((result) => {
         shown = result
         if (gone) result?.finalize()

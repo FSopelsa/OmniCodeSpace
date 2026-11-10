@@ -25,7 +25,7 @@ function tokenSpec(from: number, to: number) {
     encoding: {
       x,
       y: { field: 'uncached', type: 'quantitative', title: 'Uncached tokens', axis: { labelExpr: "datum.value ? format(datum.value, '~s') : '0'" } },
-      color: { field: 'tool', type: 'nominal', scale: { domain: ['Claude Code', 'Codex'] } },
+      color: { field: 'tool', type: 'nominal', scale: { domain: ['Claude Code', 'Codex'], range: ['var(--color-claude)', 'var(--color-a3)'] } },
       tooltip: [
         { field: 'uncached', title: 'Uncached', format: ',' },
         { field: 'cached', title: 'From cache', format: ',' },
