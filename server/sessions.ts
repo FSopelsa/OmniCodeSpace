@@ -181,21 +181,16 @@ export async function claudeLimits(home = homedir()): Promise<Limits | null> {
 
 export const normal = (p: string) => p.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
 
-// Worktrees this app starts sit beside the repo in <repo>.worktrees, so their runs count for that repo.
+// Worktrees this app starts sit beside the repo in <repo>.worktrees, so their runs count for that repo,
+// even after git stops listing a removed one. Both paths must already be normal().
+const under = (dir: string, root: string) => dir === root || dir.startsWith(`${root}/`) || dir.startsWith(`${root}.worktrees/`)
+
 export function projectOf(cwd: string, repos: string[]) {
   const dir = normal(cwd)
-  const repo = repos.find((r) => {
-    const root = normal(r)
-    return dir === root || dir.startsWith(`${root}/`) || dir.startsWith(`${root}.worktrees/`)
-  })
-  return basename(repo ?? cwd)
+  return basename(repos.find((r) => under(dir, normal(r))) ?? cwd)
 }
 
 export function sessionsIn(sessions: Session[], folders: string[]) {
   const roots = folders.map(normal)
-  return sessions.filter((s) => {
-    const cwd = normal(s.cwd)
-    // <repo>.worktrees counts even after git stops listing a removed worktree, as in projectOf.
-    return roots.some((r) => cwd === r || cwd.startsWith(`${r}/`) || cwd.startsWith(`${r}.worktrees/`))
-  })
+  return sessions.filter((s) => roots.some((r) => under(normal(s.cwd), r)))
 }
