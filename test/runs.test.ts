@@ -154,6 +154,20 @@ test('a run gets its own branch and worktree, waits for your click to push, and 
   assert.equal(await git(repo, 'rev-parse', 'HEAD'), base, 'the main checkout stays where it was')
 })
 
+test('a template goes ahead of the task, the run names it, and only listed templates are accepted', async () => {
+  const shop = { id: 'shop', name: 'Shop rules', description: '', tool: '', model: '', from: 'project', body: '## Role & Identity\nYou keep the shop tidy.' } as const
+  const run = await startRun(repo, { tool: 'Claude Code', task: 'Tidy up', template: shop }, address(), fake())
+  assert.deepEqual([run.template, run.task], ['Shop rules', 'Tidy up'])
+  const asked = await until(run.id, (r) => r.status === 'waiting')
+  assert.match(asked.lines.map((l) => l.text).join('\n'), /Working on: ## Role & Identity\nYou keep the shop tidy\.\n\n## Your task\n\nTidy up/)
+  stopRun(run.id)
+  await until(run.id, (r) => r.status !== 'running' && r.status !== 'waiting')
+  // A name that isn't a listed template is refused before anything starts.
+  const r = await post('/runs', { repo, tool: 'Claude Code', task: 'x', template: '../shop' })
+  assert.notEqual(r.status, 200)
+  assert.match((await r.json()).error, /No template/)
+})
+
 test('a refused push is denied, and stop ends the whole run', async () => {
   const run = await startRun(repo, { tool: 'Claude Code', task: 'Again' }, address(), fake())
   await until(run.id, (r) => r.status === 'waiting')

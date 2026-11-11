@@ -11,6 +11,7 @@ import { allSessions, claudeLimits, codexLimits, projectOf, sessionsIn } from '.
 import { answerRun, askRun, listRuns, reviewRun, startRun, stopRun, watchRun } from './runs.ts'
 import { setup } from './setup.ts'
 import { remotes, stack } from './stack.ts'
+import { template, templates } from './templates.ts'
 import { editTodo, shareTodo, todo } from './todo.ts'
 
 // Made fresh each time the server starts, and put into the page. Every write needs it.
@@ -82,6 +83,8 @@ async function route(url: URL) {
     }
     case '/todo':
       return todo(await knownRepo(path))
+    case '/templates':
+      return templates(await knownRepo(path))
     case '/runs':
       return listRuns()
     case '/runs/review':
@@ -99,9 +102,13 @@ async function write(path: string, body: any, req: IncomingMessage) {
   if (req.headers['x-omni-token'] !== token) throw Object.assign(new Error('Reload the page: the server has restarted since it loaded.'), { status: 403 })
   const self = `http://${req.headers.host}/api`
   switch (path) {
-    case '/runs':
+    case '/runs': {
       // Only these fields: the rest of startRun's options are for orders, set on the server.
-      return startRun(await knownRepo(body.repo), { tool: body.tool, task: body.task, model: body.model }, self)
+      const repo = await knownRepo(body.repo)
+      // The page names a template by id, and only a listed template's file is read.
+      const picked = body.template ? await template(repo, body.template) : undefined
+      return startRun(repo, { tool: body.tool, task: body.task, model: body.model, template: picked }, self)
+    }
     case '/todo':
       return editTodo(await knownRepo(body.repo), body)
     case '/todo/share':

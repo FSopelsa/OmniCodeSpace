@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Order } from '../server/orders.ts'
 import type { Line, Run, Tool } from '../server/runs.ts'
+import type { Template } from '../server/templates.ts'
 import { Lamp, ago, button, clock, post, primary, useJson } from './ui.tsx'
 
 type Repo = { name: string; path: string }
@@ -17,6 +18,16 @@ export function StartDialog({ repos, current, order, onClose, onStarted }: { rep
   const [tool, setTool] = useState<Tool>(order?.to ?? 'Claude Code')
   const [model, setModel] = useState('')
   const [task, setTask] = useState('')
+  const [picked, setPicked] = useState('')
+  const templates = useJson<Template[]>(order ? null : `/api/templates?path=${encodeURIComponent(repo)}`).data ?? []
+  const chosen = templates.find((t) => t.id === picked)
+  // A template can suggest a tool and model. They fill the fields, which you can still change.
+  const pick = (id: string) => {
+    setPicked(id)
+    const t = templates.find((x) => x.id === id)
+    if (t?.tool) setTool(t.tool)
+    if (t?.tool || t?.model) setModel(t.model)
+  }
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -29,7 +40,7 @@ export function StartDialog({ repos, current, order, onClose, onStarted }: { rep
     setBusy(true)
     setError('')
     try {
-      onStarted(await (order ? post<Run>('/api/orders/run', { repo, branch: order.branch, sha: order.sha, tool, model }) : post<Run>('/api/runs', { repo, tool, model, task })))
+      onStarted(await (order ? post<Run>('/api/orders/run', { repo, branch: order.branch, sha: order.sha, tool, model }) : post<Run>('/api/runs', { repo, tool, model, task, template: picked || undefined })))
     } catch (err) {
       setError((err as Error).message)
       setBusy(false)
@@ -45,9 +56,19 @@ export function StartDialog({ repos, current, order, onClose, onStarted }: { rep
         ) : (
           <label className="grid gap-1 font-semibold">
             Project
-            <select value={repo} onChange={(e) => setRepo(e.target.value)} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal">
+            <select value={repo} onChange={(e) => (setRepo(e.target.value), setPicked(''))} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal">
               {repos.map((r) => <option key={r.path} value={r.path}>{r.name}</option>)}
             </select>
+          </label>
+        )}
+        {!order && (
+          <label className="grid gap-1 font-semibold">
+            Template <span className="text-sm font-normal text-ink-2">Instructions the agent gets ahead of your task. A project adds its own in .omni/templates.</span>
+            <select value={picked} onChange={(e) => pick(e.target.value)} className="rounded-sm border border-ink-2 bg-transparent px-2 py-1 font-normal">
+              <option value="">None</option>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.from === 'project' ? ' (project)' : ''}</option>)}
+            </select>
+            {chosen && <span className="text-sm font-normal text-ink-2">{chosen.description}</span>}
           </label>
         )}
         <fieldset className="flex flex-wrap gap-4">
@@ -165,7 +186,7 @@ export function RunPanel({ id, onClose, onSent }: { id: string; onClose: () => v
       </div>
       <p className="mt-2 flex items-center gap-2 font-semibold"><Lamp state={lampOf(run)} /> {STATUS[run.status]}</p>
       <dl className="mt-2 text-sm text-ink-2">
-        <dd>{run.tool}{run.model && `, ${run.model}`}, in {run.project}</dd>
+        <dd>{run.tool}{run.model && `, ${run.model}`}, in {run.project}{run.template && `, as ${run.template}`}</dd>
         <dd>Branch <span className={code}>{run.branch}</span></dd>
         <dd className="break-all">Folder {run.worktree}</dd>
         <dd>Started {clock(run.started)}{run.ended && `, ended ${clock(run.ended)}`}</dd>

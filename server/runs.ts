@@ -4,6 +4,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { NO_HOOKS, git, rev } from './git.ts'
+import { withTemplate, type Template } from './templates.ts'
 
 export type Tool = 'Claude Code' | 'Codex'
 export type Line = { kind: 'say' | 'tool' | 'error' | 'note'; text: string }
@@ -25,6 +26,8 @@ export type Run = {
   lines: Line[]
   // Set when the run carries out an order from another agent, and ask is set for a question.
   order?: { branch: string; ask: string }
+  // The name of the template whose instructions went ahead of the task.
+  template?: string
 }
 
 type Live = { run: Run; key: string; child?: ChildProcess; stopping?: boolean; listeners: Set<() => void>; answer?: (allow: boolean) => void }
@@ -128,14 +131,17 @@ type StartOptions = {
   cwd?: string
   // A question (order.ask set) always runs read-only.
   order?: Run['order']
+  // Instructions the agent gets ahead of the task.
+  template?: Template
   // Awaited when the agent exits, before the run's status changes.
   onEnd?: (run: Run) => Promise<void>
 }
 
 export async function startRun(repo: string, opts: StartOptions, api: string, cmd?: [string, string[]]) {
-  const { tool, task, model = '', order } = opts
+  const { tool, task, model = '', order, template } = opts
   if (tool !== 'Claude Code' && tool !== 'Codex') throw new Error('Pick Claude Code or Codex.')
-  if (!task?.trim() || task.length > 20_000) throw new Error('Describe the task, in under 20,000 characters.')
+  const input = template && task ? withTemplate(template, task) : task
+  if (!task?.trim() || input.length > 20_000) throw new Error(`Describe the task, in under 20,000 characters${template ? ' with the template' : ''}.`)
   // A model name goes on the command line, so it can't look like a flag.
   if (!/^[\w.:/-]*$/.test(model) || model.startsWith('-')) throw new Error('That model name has characters a model name never has.')
 
@@ -160,7 +166,7 @@ export async function startRun(repo: string, opts: StartOptions, api: string, cm
     await git(repo, 'worktree', 'add', '-b', branch, worktree, base)
   }
 
-  const run: Run = { id, tool, repo, project: basename(repo), branch, worktree, base, task, model, status: 'running', started: new Date().toISOString(), ended: '', ask: '', lines: [], order }
+  const run: Run = { id, tool, repo, project: basename(repo), branch, worktree, base, task, model, status: 'running', started: new Date().toISOString(), ended: '', ask: '', lines: [], order, template: template?.name }
   const live: Live = { run, key: randomBytes(16).toString('hex'), listeners: new Set() }
   runs.set(id, live)
 
@@ -172,7 +178,7 @@ export async function startRun(repo: string, opts: StartOptions, api: string, cm
   live.child = child
   // If the tool never started, writing the task fails too, and the error event already reports why.
   child.stdin.on('error', () => {})
-  child.stdin.end(task)
+  child.stdin.end(input)
   createInterface({ input: child.stdout }).on('line', (line) => update(live, {}, ...describe(tool, line)))
   let stderr = ''
   child.stderr.on('data', (d) => (stderr = (stderr + d).slice(-2000)))

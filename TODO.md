@@ -8,3 +8,4 @@
 - [x] Share one pushError helper between orders.ts and todo.ts (audit #5)
 - [ ] Keep one midnight() in datasets.ts and import it in Data.tsx (2026-11-09 audit #6)
 - [ ] Order branches claude/a-b and claude/a/b get the same worktree folder, so the second run fails
+- [ ] Template editor in Omni: create, edit and delete a project's .omni/templates from the app, with a reminder to commit, like the To-do view

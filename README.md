@@ -36,7 +36,7 @@ A local workspace for coding agents and the people running them, with git as the
 - **Start an agent:** runs Claude Code or Codex on a task in a new branch and folder, streams its output, can stop it, waits for your click before Claude Code pushes, and shows the branch for review.
 - **Orders:** takes tasks that agents elsewhere push as git branches, runs them after your click, and sends a report back on the same branch. Read-only questions about another project start by themselves.
 - **To-do:** one shared list per project in `TODO.md`, for people and agents alike, plus the `TODO` and `FIXME` comments in its code. After an edit, it reminds you to commit and push the list.
-- **Data:** charts of one project's work, from git and the tools' logs: uncached tokens per day by tool, agent-minutes by hour of the week, and commits per week by who made them. Pick a range from 7 days to all time, and open any chart as a table of the same numbers.
+- **Data:** charts of one project's work, from git and the tools' logs: uncached tokens per day by tool, agent-minutes by hour of the week, and commits per week by who made them. If you use the [ponytail](https://github.com/DietrichGebert/ponytail) plugin, it also shows each task's cost, turns, agent time, tokens, reuse and test result from ponytail's band file. Pick a range from 7 days to all time, and open any chart as a table of the same numbers.
 - **Plan left:** the header shows how much of the Codex and Claude Code subscription windows is left, with reset times on hover. Codex readings come from its own logs. Claude readings come from the snapshot that [TokenUsageTracker](https://github.com/FSopelsa/TokenUsageTracker)'s status-line bridge writes to `~/.claude/usage-widget/usage.json`, so Claude shows "no reading" until that bridge is set up. A reading older than an hour shows its age.
 
 ## Requirements
@@ -119,6 +119,33 @@ Select **Start an agent**, pick a project and a tool, and describe the task. The
 - **Live output and stop.** The Roster tab lists runs started from here. Select one for its output, a stop button, and, once it ends, its commits and diff.
 - **Cleaning up.** Merge or push the branch yourself when you're happy, then remove the folder with `git worktree remove <folder>`.
 
+### Templates
+
+A template gives the agent standing instructions ahead of your task: its role, its boundaries, the tools and sources to use, how to report, and sometimes a step-by-step workflow. Pick one under **Template** in the dialog, or None.
+
+| Template | For |
+|---|---|
+| Implementer | A feature as the smallest complete change, with a test, committed on its branch |
+| Bug fixer | Reproduce, find the root cause, prove it with a failing test, fix it once |
+| Reviewer | Ranked findings in `review.md`, without changing code. Suggests Codex. |
+| Test writer | Tests for risky code that has none, without changing behaviour |
+| Docs writer | The README or docs brought in line with the code. Suggests Claude Code with Sonnet. |
+
+Omni's own templates are in [`templates/`](templates). A project adds its own as `.omni/templates/<id>.md`, and one with the same id as Omni's replaces it for that project, so project templates travel with git. A template is Markdown with optional frontmatter:
+
+```markdown
+---
+name: Shop reviewer
+description: Reviews against this shop's rules.
+tool: Codex
+model: gpt-6.1-terra
+---
+## Role & Identity
+...
+```
+
+`tool` (`Claude Code` or `Codex`) and `model` fill those fields when you pick the template, and you can still change them. A template is instructions, not a lock: the sandbox and the push check stay the same whatever it says.
+
 The app finds `claude` on your PATH, and Codex inside the Codex desktop app's folder or on your PATH. Set `OMNI_CLAUDE` or `OMNI_CODEX` to use other copies. Set `OMNI_PROXY` (for example `http://127.0.0.1:8787`) to send Claude Code's API calls through a local proxy; a Claude Code settings file that defines `ANTHROPIC_BASE_URL` takes precedence, and Codex follows its own `config.toml`. Runs use your own login for each tool. Anthropic's terms don't clearly say whether scripting Claude Code with a subscription is allowed, so read them yourself, and see the hurdles in [docs/PLAN.md](docs/PLAN.md).
 
 The push check is a guardrail against mistakes, not a sandbox. It reads the shell command an agent runs, and the names of MCP tools that write to a remote repo, such as GitHub's `push_files`. A push from inside a script isn't caught. Any program on this PC can also read the page's token, so an agent whose permission rules let it run `curl` could approve its own push.
@@ -181,6 +208,7 @@ Each project has one to-do list, `TODO.md` at its root, shared through git like 
 - Everything stays on your computer unless you push it. There are no accounts, no telemetry and no cloud service. Send back pushes an order's branch, including its `report.md` with this PC's name, the agent's last message and, for a question, what it read in the other project.
 - The server listens on `127.0.0.1` and refuses requests from other hosts and from other websites. Anything that writes needs a token that is made each time the server starts and is put into the page.
 - Session logs can contain anything you or an agent typed, including secrets. The app shows their metadata (title, model, branch, folder, tokens), never the conversation.
+- The Data tab reads ponytail's per-project CSV files in `~/.config/ponytail/band/`, if they exist, and shows their task names, which ponytail takes from your prompts. It never writes there.
 - To show what agents can touch, the app reads Claude Code's and Codex's settings files. MCP servers appear by name only. Their commands, arguments and environment values, where keys often live, never reach the browser.
 - The web app writes when you start an agent: it adds a branch and a worktree folder, and runs the tool there. The To-do tab writes `TODO.md`, and commits and pushes it when you click. In repos with orders turned on, it also fetches order branches from `origin`, starts questions, commits each order's `report.md`, and pushes an order branch when you click Send back. The command line writes too: `enable` makes the changes listed above, and `seen`, `arrive` and `hook` move refs under `refs/omni/`.
 - Remote URLs are shown without any login they contain.
