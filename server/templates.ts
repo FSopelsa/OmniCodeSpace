@@ -12,13 +12,17 @@ const ID = /^[\w-]+$/
 
 async function read(dir: string, from: Template['from']): Promise<Template[]> {
   const files = (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.md') && ID.test(basename(f, '.md')))
-  return Promise.all(
-    files.map(async (f) => {
-      const { fields, body } = frontmatter(await readFile(join(dir, f), 'utf8'))
+  const found = await Promise.all(
+    files.map(async (f): Promise<Template | null> => {
+      // A file that can't be read (a folder named x.md, one deleted meanwhile) is skipped, so it can't hide the others.
+      const text = await readFile(join(dir, f), 'utf8').catch(() => null)
+      if (text === null) return null
+      const { fields, body } = frontmatter(text)
       const tool = fields.tool === 'Claude Code' || fields.tool === 'Codex' ? fields.tool : ''
       return { id: basename(f, '.md'), name: fields.name || basename(f, '.md'), description: fields.description ?? '', tool, model: fields.model ?? '', from, body }
     }),
   )
+  return found.filter((t) => t !== null)
 }
 
 export async function templates(repo: string, builtIn = BUILT_IN) {

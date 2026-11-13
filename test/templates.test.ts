@@ -19,6 +19,8 @@ file(builtIn, 'docs.md', 'name: Docs writer\ndescription: Writes docs.\ntool: Ge
 file(own, 'reviewer.md', 'name: Shop reviewer\ndescription: Our own review rules.', '## Role & Identity\nYou review the shop.')
 file(own, 'bad name.md', 'name: Skipped', 'Never listed')
 writeFileSync(join(own, 'notes.txt'), 'not a template')
+// Can't be read as a file, and must not hide the readable templates.
+mkdirSync(join(own, 'folder.md'))
 
 test('lists Omni templates, a project file replaces one with the same name, and odd files are skipped', async () => {
   const list = await templates(repo, builtIn)

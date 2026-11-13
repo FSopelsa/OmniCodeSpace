@@ -22,12 +22,15 @@ export function StartDialog({ repos, current, order, onClose, onStarted }: { rep
   const templates = useJson<Template[]>(order ? null : `/api/templates?path=${encodeURIComponent(repo)}`).data ?? []
   const chosen = templates.find((t) => t.id === picked)
   // A template can suggest a tool and model. They fill the fields, which you can still change.
+  // Its model replaces the old one, so a model never outlives the template or tool it belongs to.
   const pick = (id: string) => {
     setPicked(id)
     const t = templates.find((x) => x.id === id)
     if (t?.tool) setTool(t.tool)
-    if (t?.tool || t?.model) setModel(t.model)
+    setModel(t?.model ?? '')
   }
+  // Model names belong to one tool, such as sonnet to Claude Code, so a new tool starts from its default.
+  const switchTool = (t: Tool) => (setTool(t), setModel(''))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -75,7 +78,7 @@ export function StartDialog({ repos, current, order, onClose, onStarted }: { rep
           <legend className="mb-1 font-semibold">Tool</legend>
           {(['Claude Code', 'Codex'] as const).map((t) => (
             <label key={t} className="flex items-center gap-1.5">
-              <input type="radio" name="tool" value={t} checked={tool === t} onChange={() => setTool(t)} /> {t}
+              <input type="radio" name="tool" value={t} checked={tool === t} onChange={() => switchTool(t)} /> {t}
             </label>
           ))}
         </fieldset>

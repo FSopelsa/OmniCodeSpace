@@ -344,14 +344,25 @@ async function mergeCheck(run: Run) {
   return out === null ? null : { into, conflicts: out.trim().split('\n').slice(1).filter(Boolean) }
 }
 
+// Codex can't commit, so the files it adds, such as a reviewer's review.md, are untracked, and plain git diff leaves them out.
+async function untracked(worktree: string) {
+  const files = (await git(worktree, 'ls-files', '--others', '--exclude-standard').catch(() => '')).split('\n').filter(Boolean)
+  // shortcut: the first 20 new files, enough for an agent's report and a few new sources; list the rest if runs add more.
+  // --no-index exits 1 when the files differ, which they always do here, so the diff is in the error's stdout.
+  const diffs = await Promise.all(files.slice(0, 20).map((f) => git(worktree, 'diff', '--no-index', '--no-ext-diff', '--no-color', '--', '/dev/null', f).catch((e) => String(e.stdout ?? '').trimEnd())))
+  return diffs.filter(Boolean).join('\n')
+}
+
 export async function reviewRun(id: unknown) {
   const { run } = find(id)
-  const [commits, status, diff, merge] = await Promise.all([
+  const [commits, status, tracked, added, merge] = await Promise.all([
     git(run.repo, 'log', '--format=%h %s', `${run.base}..${run.branch}`),
     git(run.worktree, 'status', '--short').catch(() => ''),
     git(run.worktree, 'diff', '--no-ext-diff', '--no-color', '--stat', '--patch', run.base).catch(() => ''),
+    untracked(run.worktree),
     mergeCheck(run),
   ])
+  const diff = [tracked, added].filter(Boolean).join('\n')
   return { commits: commits ? commits.split('\n') : [], uncommitted: status ? status.split('\n') : [], diff: diff.length > MAX_DIFF ? `${diff.slice(0, MAX_DIFF)}\n\nCut short. Run git diff ${run.base.slice(0, 7)} in the worktree for the rest.` : diff, merge }
 }
 

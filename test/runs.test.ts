@@ -148,9 +148,12 @@ test('a run gets its own branch and worktree, waits for your click to push, and 
   assert.match(text, /Gate said: .*"permissionDecision":"allow"/)
   assert.deepEqual(listRuns().find((r) => r.id === run.id)?.lines, [])
 
+  // A file the agent left uncommitted, as Codex must, shows in the diff too.
+  writeFileSync(join(run.worktree, 'review.md'), 'Found one bug\n')
   const review = await reviewRun(run.id)
   assert.match(review.commits[0], /^[0-9a-f]+ Add hello$/)
   assert.match(review.diff, /hello\.txt/)
+  assert.match(review.diff, /review\.md[\s\S]*\+Found one bug/)
   assert.equal(await git(repo, 'rev-parse', 'HEAD'), base, 'the main checkout stays where it was')
 })
 
