@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Commit } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
-import { activityByHour, commitsByWeek, tokensByDay } from '../src/datasets.ts'
+import type { BandTask } from '../server/band.ts'
+import { activityByHour, commitsByWeek, taskRows, testState, tokensByDay } from '../src/datasets.ts'
 
 // Tuesday 3 November 2026, local time.
 const at = (day: number, h: number, m = 0) => new Date(2026, 10, day, h, m).toISOString()
@@ -60,4 +61,28 @@ test('counts commits per Monday-first week, folding all but the three busiest na
   ])
   // The range filters rows, never the names, so colours stay put.
   assert.deepEqual(commitsByWeek(commits, new Date(2026, 10, 9).getTime()).names, names)
+})
+
+const task = (over: Partial<BandTask>): BandTask => ({
+  key: 'k', started: '2026-11-05 01:29', name: 'Task', cost: 1, turns: 1, minutes: 1, tokens: 1, output: 1, reuse: null, tests: 'not run', level: 'full', model: '', ...over,
+})
+
+test('reads a test result as passed, failed, stale or not run', () => {
+  assert.equal(testState('74 passed'), 'passed')
+  assert.equal(testState('3 failed'), 'failed')
+  assert.equal(testState('74 passed, 2 failed'), 'failed')
+  assert.equal(testState('74 passed, 0 failed'), 'passed')
+  assert.equal(testState('stale'), 'stale')
+  assert.equal(testState('not run'), 'not run')
+  assert.equal(testState(''), 'not run')
+})
+
+test('places tasks at their local start time, from the start of the range', () => {
+  const rows = taskRows([
+    task({ key: 'old', started: '2026-11-01 10:00' }),
+    task({ key: 'new', started: '2026-11-05 01:29', name: 'Fix it', cost: null, reuse: 25, tests: '74 passed' }),
+  ], new Date(2026, 10, 2).getTime())
+  assert.deepEqual(rows, [
+    { at: new Date(2026, 10, 5, 1, 29).getTime(), name: 'Fix it', cost: null, turns: 1, minutes: 1, tokens: 1, reuse: 25, tests: '74 passed', state: 'passed' },
+  ])
 })

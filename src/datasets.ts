@@ -1,3 +1,4 @@
+import type { BandTask } from '../server/band.ts'
 import type { Commit } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
 
@@ -66,4 +67,16 @@ export function commitsByWeek(commits: Commit[], from: number) {
     rows.set(`${week}|${name}`, row)
   }
   return { names, rows: [...rows.values()].sort((a, b) => a.week - b.week || names.indexOf(a.who) - names.indexOf(b.who)) }
+}
+
+// ponytail writes the test result as free text, such as "74 passed", "stale" or "not run".
+export const testState = (tests: string) =>
+  /fail/i.test(tests.replace(/\b0 failed/gi, '')) ? 'failed' : /pass/i.test(tests) ? 'passed' : /stale/i.test(tests) ? 'stale' : 'not run'
+
+// ponytail's tasks from the start of the range. "started" is this PC's local time, which a date without an offset is read as.
+export function taskRows(tasks: BandTask[], from: number) {
+  return tasks.flatMap(({ started, name, cost, turns, minutes, tokens, reuse, tests }) => {
+    const at = new Date(started.replace(' ', 'T')).getTime()
+    return at >= from ? [{ at, name, cost, turns, minutes, tokens, reuse, tests, state: testState(tests) }] : []
+  })
 }

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
+import type { BandTask } from '../server/band.ts'
 import type { Commit } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
 import { Chart } from './Chart.tsx'
-import { DAY, DAYS, activityByHour, commitsByWeek, tokensByDay } from './datasets.ts'
+import { DAY, DAYS, activityByHour, commitsByWeek, taskRows, tokensByDay } from './datasets.ts'
 import { count, useJson } from './ui.tsx'
 
 const RANGES = [[7, 'Last 7 days'], [30, 'Last 30 days'], [90, 'Last 90 days'], [0, 'All time']] as const
@@ -68,15 +69,41 @@ function commitSpec(from: number, to: number, names: string[]) {
   }
 }
 
+const started = (t: number) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+// One dot per task: height is cost, size is agent time, colour is the test result. Unknown costs have no dot but stay in the table.
+function taskSpec(from: number, to: number) {
+  return {
+    width: 'container', height: 220, mark: { type: 'circle', opacity: 0.8 },
+    transform: [{ filter: 'datum.cost !== null' }],
+    encoding: {
+      x: { field: 'at', type: 'temporal', title: null, scale: { domain: [from, to] }, axis: { format: '%d %b', grid: false } },
+      y: { field: 'cost', type: 'quantitative', title: 'Cost, USD' },
+      size: { field: 'minutes', type: 'quantitative', title: 'Agent-minutes', legend: null, scale: { range: [40, 900] } },
+      color: { field: 'state', type: 'nominal', scale: { domain: ['passed', 'failed', 'stale', 'not run'], range: ['var(--color-run)', 'var(--color-stop)', 'var(--color-wait)', 'var(--chart-other)'] } },
+      tooltip: [
+        { field: 'name', title: 'Task' },
+        { field: 'cost', title: 'Cost, USD', format: '$.2f' },
+        { field: 'turns', title: 'Turns' },
+        { field: 'minutes', title: 'Agent-minutes', format: '.1f' },
+        { field: 'tokens', title: 'Tokens', format: ',' },
+        { field: 'reuse', title: 'Reuse %' },
+        { field: 'tests', title: 'Tests' },
+        { field: 'at', type: 'temporal', title: 'Started', format: '%a %d %b %H:%M' },
+      ],
+    },
+  }
+}
+
 export function DataView({ path }: { path: string }) {
-  const { data, error } = useJson<{ commits: Commit[]; sessions: Session[] }>(`/api/data?path=${encodeURIComponent(path)}`)
+  const { data, error } = useJson<{ commits: Commit[]; sessions: Session[]; tasks: BandTask[] }>(`/api/data?path=${encodeURIComponent(path)}`)
   const [days, setDays] = useState<number>(30)
 
   const charts = useMemo(() => {
     if (!data) return undefined
     const now = Date.now()
     const today = midnight(now)
-    const earliest = Math.min(today, ...data.commits.map((c) => Date.parse(c.date)), ...data.sessions.map((s) => Date.parse(s.spans[0]?.[0] ?? s.last)))
+    const earliest = Math.min(today, ...data.commits.map((c) => Date.parse(c.date)), ...data.sessions.map((s) => Date.parse(s.spans[0]?.[0] ?? s.last)), ...taskRows(data.tasks, 0).map((t) => t.at))
     const from = days ? today - (days - 1) * DAY : midnight(earliest)
     const end = today + DAY
     const authors = commitsByWeek(data.commits, from)
@@ -86,6 +113,8 @@ export function DataView({ path }: { path: string }) {
       tokens: { rows: tokensByDay(data.sessions, from), spec: tokenSpec(from, end) },
       activity: { rows: activityByHour(data.sessions, from), spec: activitySpec },
       commits: { rows: authors.rows.map((r) => ({ ...r, rank: authors.names.indexOf(r.who) })), spec: commitSpec(weekFrom, weekFrom + Math.ceil((end - weekFrom) / WEEK) * WEEK, authors.names) },
+      tasks: taskRows(data.tasks, from),
+      from, end,
     }
   }, [data, days])
 
@@ -138,6 +167,26 @@ export function DataView({ path }: { path: string }) {
             { key: 'commits', label: 'Commits' },
           ]}
         />
+        {charts.tasks.length ? (
+          <Chart
+            title="What each task cost"
+            note="From ponytail's band file for this project, in ~/.config/ponytail/band. Cost is ponytail's estimate in US dollars; a bigger dot is more agent time."
+            spec={taskSpec(charts.from, charts.end)}
+            rows={charts.tasks}
+            columns={[
+              { key: 'at', label: 'Started', show: started },
+              { key: 'name', label: 'Task' },
+              { key: 'cost', label: 'Cost', show: (c: number | null) => (c === null ? 'unknown' : `$${c.toFixed(2)}`) },
+              { key: 'turns', label: 'Turns' },
+              { key: 'minutes', label: 'Agent-minutes', show: (m: number) => m.toFixed(1) },
+              { key: 'tokens', label: 'Tokens', show: count },
+              { key: 'reuse', label: 'Reuse', show: (r: number | null) => (r === null ? 'none' : `${r}%`) },
+              { key: 'tests', label: 'Tests' },
+            ]}
+          />
+        ) : (
+          <p className="mt-8 text-sm text-ink-2">No ponytail tasks for this project in this range. They come from ponytail's band file in ~/.config/ponytail/band.</p>
+        )}
       </div>
     </section>
   )

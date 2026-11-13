@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmniCodeSpace</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800;900&family=Overpass+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: two-column hero, copy left and a transit-style track map right; four "lines" explained below.
+   Palette: the app's own enamel panel tokens (Day light, Night dark). */
+:root {
+  --sheet: #f3f5f0; --panel: #d8dfd7; --tile: #e6ebe4; --ink: #16231d; --ink-2: #4e5e56; --rule: #c9d2c9;
+  --grid: rgb(22 35 29 / 0.05);
+  --claude: #c25a1c; --codex: #0e7c86; --cloud: #2346c4; --you: #8a2a7e; --git: #1f8a55; --wait: #e0a100;
+  --accent: #2346c4; --on-accent: #ffffff;
+  --display: "Overpass", system-ui, sans-serif;
+  --body: "Overpass", system-ui, sans-serif;
+  --mono: "Overpass Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --sheet: #111915; --panel: #1a241f; --tile: #1f2b25; --ink: #e3ebe2; --ink-2: #9fb0a5; --rule: #2f3d36;
+  --grid: rgb(227 235 226 / 0.045);
+  --claude: #e0803f; --codex: #45c6cf; --cloud: #8ea6ff; --you: #e08ad3; --git: #3ec27f; --wait: #f2b52e;
+  --accent: #8ea6ff; --on-accent: #0d1530; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --sheet: #111915; --panel: #1a241f; --tile: #1f2b25; --ink: #e3ebe2; --ink-2: #9fb0a5; --rule: #2f3d36;
+  --grid: rgb(227 235 226 / 0.045);
+  --claude: #e0803f; --codex: #45c6cf; --cloud: #8ea6ff; --you: #e08ad3; --git: #3ec27f; --wait: #f2b52e;
+  --accent: #8ea6ff; --on-accent: #0d1530; color-scheme: dark }
+
+body {
+  background: var(--sheet); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 56px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; align-items: center; }
+@media (max-width: 900px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+
+.badge { display: inline-flex; align-items: center; gap: 10px; padding: 6px 14px 5px; border: 1px solid var(--rule);
+  border-radius: 999px; background: var(--tile); font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+.badge b { color: var(--wait); font-weight: 600; }
+.badge i { width: 1px; height: 14px; background: var(--rule); }
+
+h1 { font-family: var(--display); font-weight: 900; font-size: clamp(40px, 6vw, 68px); line-height: 1.02;
+  letter-spacing: -0.02em; margin: 26px 0 0; text-wrap: balance; }
+h1 span { display: block; color: var(--accent); }
+.lede { max-width: 58ch; color: var(--ink-2); font-size: 17.5px; margin: 22px 0 0; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 22px; border-radius: 10px;
+  font: 600 16px/1 var(--body); text-decoration: none; cursor: pointer; border: 1px solid var(--rule); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.ghost { background: var(--tile); color: var(--ink); }
+.btn code { font-family: var(--mono); font-size: 13.5px; color: var(--ink-2); }
+.btn:hover { filter: brightness(1.06); }
+.btn:focus-visible { outline: 3px solid var(--wait); outline-offset: 2px; }
+
+.facts { display: flex; flex-wrap: wrap; gap: 14px 36px; margin-top: 36px; }
+.fact { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: start; }
+.fact svg { grid-row: span 2; margin-top: 3px; }
+.fact strong { font: 800 20px/1.2 var(--display); }
+.fact small { font-size: 12.5px; color: var(--ink-2); }
+
+/* Track map */
+.map { width: 100%; max-width: 640px; height: auto; justify-self: center; overflow: visible; }
+.map text { font-family: var(--body); fill: var(--ink); }
+.map .sub { fill: var(--ink-2); font-size: 11.5px; }
+.map .name { font-size: 13.5px; font-weight: 600; }
+.tile { fill: var(--tile); stroke: var(--rule); stroke-width: 1.5; }
+.hubtile { fill: var(--sheet); stroke: var(--ink); stroke-width: 2; }
+.ring { fill: none; stroke: var(--accent); stroke-opacity: 0.22; stroke-width: 1.5; }
+.halo { fill: var(--accent); fill-opacity: 0.07; }
+.track { fill: none; stroke-width: 4; stroke-linecap: round; }
+.stn { fill: var(--sheet); stroke-width: 3; }
+.ico { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.c-claude { stroke: var(--claude); } .c-codex { stroke: var(--codex); } .c-cloud { stroke: var(--cloud); }
+.c-you { stroke: var(--you); } .c-git { stroke: var(--git); } .c-ink { stroke: var(--ink-2); }
+.f-claude { fill: var(--claude); } .f-codex { fill: var(--codex); } .f-cloud { fill: var(--cloud); }
+.f-you { fill: var(--you); } .f-git { fill: var(--git); } .f-ink { fill: var(--ink-2); }
+
+/* The four lines */
+.lines { margin-top: 72px; border-top: 1px solid var(--rule); padding-top: 32px; }
+.lines h2 { font: 800 13px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 22px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; }
+@media (max-width: 980px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .grid4 { grid-template-columns: minmax(0, 1fr); } }
+.line { display: grid; gap: 8px; align-content: start; }
+.line .swatch { height: 4px; border-radius: 2px; position: relative; margin-bottom: 6px; }
+.line .swatch::after { content: ""; position: absolute; left: 0; top: -5px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--sheet); border: 3px solid currentColor; }
+.line h3 { margin: 0; font: 800 18px/1.25 var(--display); }
+.line p { margin: 0; color: var(--ink-2); font-size: 15px; }
+.privacy { margin: 40px 0 0; font-size: 14px; color: var(--ink-2); max-width: 80ch; }
+.privacy code, .line code { font-family: var(--mono); font-size: 0.9em; }
+</style>
+
+<div class="wrap">
+  <section class="hero">
+    <div>
+      <span class="badge"><b>Early</b><i></i>Local · Node 24 + git</span>
+      <h1>Claude Code and Codex, <span>on one track.</span></h1>
+      <p class="lede">OmniCodeSpace is a local workspace for Claude Code, Codex and the people running them, with git as the shared memory. It draws your projects as track diagrams, briefs a returning agent on what changed, and starts agents in their own branches, holding Claude Code's pushes until you click.</p>
+      <div class="actions">
+        <a class="btn primary" href="https://github.com/FSopelsa/OmniCodeSpace" target="_blank" rel="noopener">Get it on GitHub <span aria-hidden="true">→</span></a>
+        <button class="btn ghost" id="copy" type="button" aria-label="Copy the start command">Copy <code id="cmd">npm install &amp;&amp; npm run dev</code></button>
+      </div>
+      <div class="facts">
+        <div class="fact">
+          <svg width="20" height="20" viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <strong>127.0.0.1</strong><small>listens only on this computer</small>
+        </div>
+        <div class="fact">
+          <svg width="20" height="20" viewBox="0 0 24 24" class="ico" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+          <strong>0</strong><small>accounts, telemetry or cloud service</small>
+        </div>
+        <div class="fact">
+          <svg width="20" height="20" viewBox="0 0 24 24" class="ico" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <strong>5 views</strong><small>Tracks, Roster, Map, To-do, Data</small>
+        </div>
+      </div>
+    </div>
+
+    <svg class="map" viewBox="0 0 640 520" role="img" aria-labelledby="mapTitle mapDesc">
+      <title id="mapTitle">How OmniCodeSpace connects agents and your repos</title>
+      <desc id="mapDesc">Claude Code, Codex, cloud agents and you each run on a line into OmniCodeSpace on your machine, which reads and writes your git repos, the agents' session logs and TODO.md.</desc>
+
+      <!-- Lines into the hub -->
+      <path id="t1" class="track c-claude" d="M80 142 C80 205 296 195 296 252"/>
+      <path id="t2" class="track c-codex"  d="M240 142 C240 200 312 200 312 252"/>
+      <path id="t3" class="track c-cloud"  d="M400 142 C400 200 328 200 328 252"/>
+      <path id="t4" class="track c-you"    d="M560 142 C560 205 344 195 344 252"/>
+      <!-- Lines out to what it reads and writes -->
+      <path id="b1" class="track c-git" d="M304 404 C304 440 150 430 150 462"/>
+      <path id="b2" class="track c-ink" d="M320 404 V462"/>
+      <path id="b3" class="track c-git" d="M336 404 C336 440 490 430 490 462"/>
+
+      <circle class="stn c-claude" cx="188" cy="199" r="5"/>
+      <circle class="stn c-codex"  cx="276" cy="199" r="5"/>
+      <circle class="stn c-cloud"  cx="364" cy="199" r="5"/>
+      <circle class="stn c-you"    cx="452" cy="199" r="5"/>
+      <circle class="stn c-git" cx="227" cy="434" r="5"/>
+      <circle class="stn c-ink" cx="320" cy="433" r="5"/>
+      <circle class="stn c-git" cx="413" cy="434" r="5"/>
+
+      <!-- Trains: removed when the viewer prefers reduced motion -->
+      <g class="trains">
+        <circle r="4" class="f-claude"><animateMotion dur="3.4s" repeatCount="indefinite"><mpath href="#t1"/></animateMotion></circle>
+        <circle r="4" class="f-codex"><animateMotion dur="3.4s" begin="0.8s" repeatCount="indefinite"><mpath href="#t2"/></animateMotion></circle>
+        <circle r="4" class="f-cloud"><animateMotion dur="3.4s" begin="1.6s" repeatCount="indefinite"><mpath href="#t3"/></animateMotion></circle>
+        <circle r="4" class="f-you"><animateMotion dur="3.4s" begin="2.4s" repeatCount="indefinite"><mpath href="#t4"/></animateMotion></circle>
+        <circle r="4" class="f-git"><animateMotion dur="5s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#b1"/></animateMotion></circle>
+        <circle r="4" class="f-ink"><animateMotion dur="5s" begin="1.2s" repeatCount="indefinite"><mpath href="#b2"/></animateMotion></circle>
+        <circle r="4" class="f-git"><animateMotion dur="5s" begin="2.5s" repeatCount="indefinite" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="linear"><mpath href="#b3"/></animateMotion></circle>
+      </g>
+
+      <!-- Top: who works on your projects -->
+      <g transform="translate(80 0)">
+        <rect class="tile" x="-34" y="24" width="68" height="68" rx="14"/>
+        <g class="ico c-claude" transform="translate(0 58)"><path d="M0 -13V13M-13 0H13M-9.2 -9.2L9.2 9.2M-9.2 9.2L9.2 -9.2" stroke-width="3"/></g>
+        <text class="name" y="114" text-anchor="middle">Claude Code</text>
+        <text class="sub" y="131" text-anchor="middle">brief at session start</text>
+      </g>
+      <g transform="translate(240 0)">
+        <rect class="tile" x="-34" y="24" width="68" height="68" rx="14"/>
+        <g class="ico c-codex" transform="translate(0 58)" stroke-width="2.6"><path d="M-11 -7L-3 0L-11 7M1 9H12"/></g>
+        <text class="name" y="114" text-anchor="middle">Codex</text>
+        <text class="sub" y="131" text-anchor="middle">sandboxed, own branch</text>
+      </g>
+      <g transform="translate(400 0)">
+        <rect class="tile" x="-34" y="24" width="68" height="68" rx="14"/>
+        <g class="ico c-cloud" transform="translate(0 58)" stroke-width="2.4"><path d="M-9 8H9A7 7 0 0 0 8 -6A10 10 0 0 0 -11 -3A6 6 0 0 0 -9 8Z"/></g>
+        <text class="name" y="114" text-anchor="middle">Cloud agents</text>
+        <text class="sub" y="131" text-anchor="middle">orders as git branches</text>
+      </g>
+      <g transform="translate(560 0)">
+        <rect class="tile" x="-34" y="24" width="68" height="68" rx="14" stroke-dasharray="5 4"/>
+        <g class="ico c-you" transform="translate(0 58)" stroke-width="2.4"><circle cx="0" cy="-5" r="5.5"/><path d="M-11 12A11 9 0 0 1 11 12"/></g>
+        <text class="name" y="114" text-anchor="middle">You</text>
+        <text class="sub" y="131" text-anchor="middle">click to allow a push</text>
+      </g>
+
+      <!-- Hub -->
+      <circle class="halo" cx="320" cy="300" r="82"/>
+      <circle class="ring" cx="320" cy="300" r="82"/>
+      <rect class="hubtile" x="272" y="252" width="96" height="96" rx="20"/>
+      <g transform="translate(320 300)">
+        <path class="track c-claude" stroke-width="5" d="M-20 -24 C-20 -4 0 -6 0 18"/>
+        <path class="track c-cloud"  stroke-width="5" d="M20 -24 C20 -4 0 -6 0 18"/>
+        <path class="track c-codex"  stroke-width="5" d="M0 -24 V18"/>
+        <circle class="stn c-git" cx="0" cy="22" r="7" stroke-width="3.5"/>
+      </g>
+      <text x="320" y="374" text-anchor="middle" style="font-weight:800;font-size:15px">OmniCodeSpace</text>
+      <text class="sub" x="320" y="392" text-anchor="middle">On your machine</text>
+
+      <!-- Bottom: what it reads and writes -->
+      <g transform="translate(150 0)">
+        <rect class="tile" x="-78" y="462" width="156" height="42" rx="10"/>
+        <g class="ico" transform="translate(-50 483)" stroke-width="1.8"><circle cx="-3" cy="-6" r="2.5"/><circle cx="-3" cy="7" r="2.5"/><circle cx="6" cy="-2" r="2.5"/><path d="M-3 -3.5V4.5M6 0.5C6 4 -3 2 -3 4.5"/></g>
+        <text x="-34" y="488" style="font-size:13.5px">Your git repos</text>
+      </g>
+      <g transform="translate(320 0)">
+        <rect class="tile" x="-78" y="462" width="156" height="42" rx="10"/>
+        <g class="ico" transform="translate(-52 483)" stroke-width="1.8"><path d="M-7 -6H7M-7 0H7M-7 6H3"/></g>
+        <text x="-36" y="488" style="font-size:13.5px">Session logs</text>
+      </g>
+      <g transform="translate(490 0)">
+        <rect class="tile" x="-78" y="462" width="156" height="42" rx="10"/>
+        <g class="ico" transform="translate(-44 483)" stroke-width="1.8"><rect x="-7" y="-7" width="14" height="14" rx="2.5"/><path d="M-3.5 0L-1 3L4 -3"/></g>
+        <text x="-28" y="488" style="font-family:var(--mono);font-size:13px">TODO.md</text>
+      </g>
+    </svg>
+  </section>
+
+  <section class="lines" aria-labelledby="linesTitle">
+    <h2 id="linesTitle">Four lines into one hub</h2>
+    <div class="grid4">
+      <div class="line" style="color:var(--claude)"><div class="swatch" style="background:var(--claude)"></div>
+        <h3>Claude Code</h3>
+        <p>In each repo you enable, a new or resumed session is told what changed since it last looked: commits, changed files, uncommitted work and unmerged branches. A quiet repo costs no tokens.</p></div>
+      <div class="line" style="color:var(--codex)"><div class="swatch" style="background:var(--codex)"></div>
+        <h3>Codex</h3>
+        <p>In enabled repos, gets the same brief at session start. Runs started here use its sandbox with the network off, so it can't push and its changes stay uncommitted for your review.</p></div>
+      <div class="line" style="color:var(--cloud)"><div class="swatch" style="background:var(--cloud)"></div>
+        <h3>Cloud agents</h3>
+        <p>Push an order as a git branch. You approve it here, an agent on this PC runs it, and the report goes back on the same branch.</p></div>
+      <div class="line" style="color:var(--you)"><div class="swatch" style="background:var(--you)"></div>
+        <h3>You</h3>
+        <p>Start an agent on its own branch and folder. When Claude Code tries to push, the run turns amber and waits for Allow push or Refuse.</p></div>
+    </div>
+    <p class="privacy">Session logs show metadata only (title, model, branch, tokens), never the conversation. Last-seen pointers live as git refs under <code>refs/omni/</code>, which a normal push doesn't send.</p>
+  </section>
+</div>
+
+<script>
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) document.querySelector('.trains')?.remove();
+document.getElementById('copy').addEventListener('click', async (e) => {
+  const btn = e.currentTarget, text = document.getElementById('cmd').textContent;
+  try { await navigator.clipboard.writeText(text); btn.firstChild.textContent = 'Copied '; }
+  catch { getSelection().selectAllChildren(document.getElementById('cmd')); btn.firstChild.textContent = 'Selected '; }
+  setTimeout(() => { btn.firstChild.textContent = 'Copy '; }, 1800);
+});
+</script>
+
+</html>
