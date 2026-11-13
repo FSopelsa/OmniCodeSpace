@@ -489,46 +489,37 @@ Everything has a default, so none of these block step 1.
 
 ## Hurdles
 
-Checked against the code on 2026-11-05: all still current. Code can soften the terms, log-format, untrusted-orders and merge-conflict hurdles, and `docs/superpowers/plans/2026-11-05-rough-edges.md` plans that, together with the rough edges below.
+Checked against the code on 2026-11-05. The fixes planned in `docs/superpowers/plans/2026-11-05-rough-edges.md` now soften the terms, log-format, untrusted-orders and merge-conflict hurdles, as each one below says.
 
 - **Terms of use.** Before step 7 I read Anthropic's own pages. They lean towards allowing what the app does, but nothing settles it.
   - **For:** the [headless docs](https://code.claude.com/docs/en/headless) show scripts wrapping `claude -p`. `claude setup-token` makes a subscription token for "scripts" and CI ([authentication](https://code.claude.com/docs/en/authentication)). The [legal page](https://code.claude.com/docs/en/legal-and-compliance) aims the OAuth restriction at developers who offer Claude login in their own products, and says it doesn't stop you signing in to the unmodified Claude Code binary yourself.
   - **Against:** the [Consumer Terms](https://www.anthropic.com/legal/consumer-terms) bar automated access except through an API key or where Anthropic explicitly allows it, and limit use to non-commercial. No page says whether the `-p` docs count as that permission.
-  - **In practice:** the app only starts the official, unmodified CLI on your own machine, for you. If `ANTHROPIC_API_KEY` is set, `claude -p` uses the key instead of your subscription. Older news reports: [The Register](https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access). Don't take this as legal advice.
-- **Log formats can change.** Claude Code and Codex logs are internal, so an update could break the reader. The parsers skip what they don't know, and CC Switch's MIT parsers are a reference when that happens.
+  - **In practice:** the app only starts the official, unmodified CLI on your own machine, for you. If `ANTHROPIC_API_KEY` is set, `claude -p` uses the key instead of your subscription, and each Claude Code run's first line says which of the two it bills. Older news reports: [The Register](https://www.theregister.com/2026/02/20/anthropic_clarifies_ban_third_party_claude_access). Don't take this as legal advice.
+- **Log formats can change.** Claude Code and Codex logs are internal, so an update could break the reader. The parsers skip what they don't know, and the Roster says how many logs gave no session, so a format change shows up instead of chats quietly going missing. CC Switch's MIT parsers are a reference when that happens.
 - **Cloud sessions are invisible locally.** Their logs aren't on this PC, and I found no public API listing them. You'd see only what they push, which is another reason orders use git.
-- **Orders are untrusted input.** A branch that tells an agent what to do is a prompt-injection and remote-code path. Orders run only after your click, order text is treated as data, and only branches from `origin`, in repos you turned on, count. Claude Code questions start by themselves, but their tools can only read, and the app runs no git hooks from an order branch. Anyone who can push can still spend your usage on questions. Consider signed commits before ever allowing orders to run by themselves.
+- **Orders are untrusted input.** A branch that tells an agent what to do is a prompt-injection and remote-code path. Orders run only after your click, order text is treated as data, and only branches from `origin`, in repos you turned on, count. Claude Code questions start by themselves, but their tools can only read, and the app runs no git hooks from an order branch. Anyone who can push can still spend your usage on questions. Each order shows whether its commit is signed and by whom. Require signed commits before ever allowing orders to run by themselves.
 - **Briefs carry other people's words.** Catch-up puts commit messages into an agent's context automatically, and a hostile message could try to steer it. The brief tells the agent to treat them as information, which lowers the risk without removing it. Only enable catch-up in repos whose commits you already trust. Claude Code's own start-of-session git snapshot has a similar exposure.
 - **Codex and `.git`.** OpenAI's docs say `.git` is read-only in the `workspace-write` sandbox. In my Windows test the pointer moved anyway, but a commit was blocked at `.git/index.lock`. If the pointer is blocked elsewhere, the brief still arrives and repeats next session until the pointer can move.
-- **Merge conflicts.** Worktrees keep agents apart while working, and conflicts still arrive at merge time. Show them clearly, and let a person decide.
+- **Merge conflicts.** Worktrees keep agents apart while working, and conflicts still arrive at merge time. A run's review now says whether its branch merges cleanly into the current branch, and lists the files that conflict, before you merge. A person still decides each one.
 - **API relays.** Tools in this space promote third-party API relays. Sending your code through one is a privacy decision, and this app shouldn't suggest it.
 - **Windows.** `node-pty` needs a native build if you want real terminals, so avoid it until needed. Agent teams' split panes don't support Windows Terminal.
 - **Scope creep.** The largest risk is rebuilding CC Switch and Vibe Kanban. If a step duplicates them, link to them instead.
 
 ## Rough edges in the scaffold
 
-Checked against the code on 2026-11-05: all still current. Most have a fix planned in `docs/superpowers/plans/2026-11-05-rough-edges.md`, and that plan lists the ones that stay as known limits.
+Checked against the code on 2026-11-05, after the fixes in `docs/superpowers/plans/2026-11-05-rough-edges.md`. These are the ones left.
 
-- Labels can overlap a crossing track, and a label hides when there's no room. The commit list below always has the full names.
-- The shaded "new" area follows commit time, so it isn't exactly `seen..HEAD`. The brief is the exact one.
-- Only Claude Code and Codex logs are read, and repos are found one folder deep.
-- Lamps for chats you started yourself still mean "log touched in the last 10 minutes". Only runs started from the app know when they're waiting for you.
-- The API runs inside the Vite dev server, with no production build yet. Editing a server file reloads it, which forgets started runs and makes a new token, so reload the page. A run's process keeps going until it ends.
-- **Runs live in memory.** Their branches, worktrees and tool logs stay, but the Roster's "Started from here" list empties when the server restarts.
-- **A run has no time limit.** If the tool can't reach its API, it waits silently. A Codex run did this while your Headroom proxy on port 8787 was down. Use Stop.
-- **The app never removes worktrees.** Remove one with `git worktree remove <folder>` once its branch is merged or dropped.
+- A branch label hides when there's no room for it. The commit list below always has the full names.
+- Only Claude Code and Codex logs are read, and repos are found two folders deep.
+- Lamps for chats you started yourself read the log: green while the agent has the turn, amber once it has ended its turn or you pressed Esc. Both go dark after 10 quiet minutes, so a chat waiting longer than that looks idle.
+- The API runs inside the Vite dev server, with no production build until step 15. Editing a server file keeps started runs and the page's token.
+- **A run has no time limit.** If the tool can't reach its API, it waits silently, as a Codex run did while your Headroom proxy on port 8787 was down. After 10 quiet minutes the run says so once and points at Stop.
 - **Orders arrive only while the app is open,** and at most every 5 minutes, unless you open the page or click Check now.
 - **`claude/*` branches count as orders** when their newest commit has `Omni-Status`, because cloud sessions may only be able to push those.
-- **No Dismiss button for orders.** Delete the branch on the remote instead. A question that failed to start, or whose report commit failed, waits until the server restarts.
-- **Questions use the tool's default model.** The app has no model choice for them.
 - **Codex questions wait for a click** until Codex's `read-only` sandbox has a real check on this PC.
 - **Map:** up to 4 agents per tool and 2 remotes are drawn, and the details panel lists the rest. Dependencies are read from `package.json`, `pom.xml`, Gradle, `requirements.txt` and `.csproj` files only.
 - **Schedules:** only Codex automations are read, and only daily, weekly and hourly rules.
 - A forked Claude chat starts from the tool's shared pointer, so it can miss changes its parent chat hadn't heard about. It stays silent rather than saying something false.
-- `enable` has no undo command, and the README lists the manual steps. Per-chat refs are never pruned.
-- **Plugin agents everywhere:** agents from user-level plugins appear in every repo's agent list, even if they never ran there. The Map draws only the ones defined in the project or with runs there.
-- **Not read:** claude.ai connectors, managed company settings, and permissions set only on the command line.
-- **Codex project config:** a repo's `.codex/config.toml` is shown even when Codex wouldn't apply it, which happens when the project isn't trusted.
+- **Not read:** claude.ai connectors, the `managed-settings.d` folder, registry policies and permissions set only on the command line.
 - **Small parsers:** frontmatter and TOML are read by small parsers that handle the common forms only. Unusual files may show blank fields.
-- The shaded area in the app always follows the first recorded agent, not the name typed into the catch-up box.
 - **To-do list:** nested items show as a flat list. The tab edits the main checkout's branch only. The comment scan reads tracked files, stops at 200 hits and skips JSON. The reminder knows only what the last fetch knew about the remote.

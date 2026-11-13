@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { git } from './git.ts'
 
@@ -91,4 +92,70 @@ export async function enable(folder: string, opts: { orders?: boolean } = {}) {
     changed.push('git config omni.orders')
   }
   return { repo, changed }
+}
+
+const NOTES = [AGENTS_NOTE, CLAUDE_NOTE, TODO_NOTE, ORDERS_NOTE]
+// Line endings and trailing spaces change with a checkout, so they don't count as an edit.
+const tidy = (text: string) => text.replace(/\r\n/g, '\n').split('\n').map((l) => l.trimEnd()).join('\n').trim()
+
+// Removes the sections enable wrote, where they still read as written. An edited one stays and is named in kept.
+function removeNotes(repo: string, name: string, kept: string[]) {
+  const file = join(repo, name)
+  if (!existsSync(file)) return false
+  const original = readFileSync(file, 'utf8')
+  const parts = original.replace(/\r\n/g, '\n').split(/^(?=## )/m)
+  const left = parts.filter((part) => {
+    const heading = part.split('\n')[0].trimEnd()
+    const note = NOTES.find((n) => n.startsWith(`${heading}\n`))
+    if (!note) return true
+    if (tidy(part) === tidy(note)) return false
+    kept.push(`${name}: ${heading}`)
+    return true
+  })
+  const text = left.join('').trimEnd()
+  // enable creates a CLAUDE.md holding just the import, and an AGENTS.md holding just its notes.
+  if (!text || (name === 'CLAUDE.md' && text === '@AGENTS.md')) rmSync(file)
+  else if (left.length < parts.length) writeFileSync(file, `${text}\n`.replace(/\n/g, original.includes('\r\n') ? '\r\n' : '\n'))
+  else return false
+  return true
+}
+
+// Undoes enable in one repo: the hook, the notes, the git config and every ref under refs/omni. Text you edited stays.
+export async function disable(folder: string) {
+  const repo = await git(folder, 'rev-parse', '--show-toplevel')
+  const changed: string[] = []
+  const kept: string[] = []
+
+  const settings = join(repo, CLAUDE_FILE)
+  if (existsSync(settings)) {
+    let config: any
+    try {
+      config = JSON.parse(readFileSync(settings, 'utf8'))
+    } catch {
+      throw new Error(`${settings} isn't valid JSON, so it was left alone. Fix it and run this again.`)
+    }
+    const groups: any[] = config.hooks?.SessionStart ?? []
+    const without = groups.map((g) => ({ ...g, hooks: (g.hooks ?? []).filter((h: any) => h.command !== CLAUDE_COMMAND) })).filter((g) => g.hooks.length)
+    if (without.length < groups.length || without.some((g, i) => g.hooks.length < groups[i].hooks.length)) {
+      if (without.length) config.hooks.SessionStart = without
+      else delete config.hooks.SessionStart
+      if (!Object.keys(config.hooks).length) delete config.hooks
+      if (Object.keys(config).length) writeFileSync(settings, `${JSON.stringify(config, null, 2)}\n`)
+      else rmSync(settings)
+      changed.push(CLAUDE_FILE)
+    }
+  }
+
+  for (const name of ['AGENTS.md', 'CLAUDE.md']) if (removeNotes(repo, name, kept)) changed.push(name)
+
+  for (const key of ['alias.omni', 'omni.orders']) {
+    if (await git(repo, 'config', '--local', '--unset', key).then(() => true, () => false)) changed.push(`git config ${key}`)
+  }
+
+  const refs = (await git(repo, 'for-each-ref', '--format=%(refname)', 'refs/omni/')).split('\n').filter(Boolean)
+  if (refs.length) {
+    execFileSync('git', ['-C', repo, 'update-ref', '--stdin'], { input: refs.map((r) => `delete ${r}\n`).join('') })
+    changed.push(`${refs.length} refs under refs/omni`)
+  }
+  return { repo, changed, kept }
 }

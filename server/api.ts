@@ -5,18 +5,19 @@ import { readdir } from 'node:fs/promises'
 import { homedir, hostname } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { catchup, findRepos, history, repoDetail, repoSummary, worktrees } from './git.ts'
-import { ORDER_BRANCH, checkOrders, runOrder, sendOrder } from './orders.ts'
+import { ORDER_BRANCH, checkOrders, dismissOrder, runOrder, sendOrder } from './orders.ts'
 import { schedules } from './schedules.ts'
-import { allSessions, claudeLimits, codexLimits, projectOf, sessionsIn } from './sessions.ts'
+import { allSessions, claudeLimits, codexLimits, lastScan, projectOf, sessionsIn } from './sessions.ts'
 import { readBand } from './band.ts'
-import { answerRun, askRun, listRuns, reviewRun, startRun, stopRun, watchRun } from './runs.ts'
+import { answerRun, askRun, listRuns, loadRuns, removeRun, reviewRun, startRun, stopRun, watchRun } from './runs.ts'
 import { setup } from './setup.ts'
 import { remotes, stack } from './stack.ts'
 import { template, templates } from './templates.ts'
 import { editTodo, shareTodo, todo } from './todo.ts'
 
 // Made fresh each time the server starts, and put into the page. Every write needs it.
-export const token = randomBytes(24).toString('hex')
+// Kept on globalThis because Vite reloads this module when a server file changes, and an open page would lose its token.
+export const token = ((globalThis as { omniToken?: string }).omniToken ??= randomBytes(24).toString('hex'))
 
 const roots = () => (process.env.OMNI_ROOTS ?? join(homedir(), 'IdeaProjects')).split(delimiter).filter(Boolean)
 
@@ -65,7 +66,7 @@ async function route(url: URL) {
       const [repos, sessions] = await Promise.all([findRepos(roots()), allSessions()])
       // Two days back covers "today" in any time zone the browser is in.
       const recent = sessions.filter((s) => !s.parent && Date.now() - Date.parse(s.last) < 2 * 86_400_000)
-      return { host: hostname(), sessions: recent.map((s) => ({ ...s, project: projectOf(s.cwd, repos) })), schedules: await schedules() }
+      return { host: hostname(), sessions: recent.map((s) => ({ ...s, project: projectOf(s.cwd, repos) })), schedules: await schedules(), logs: lastScan }
     }
     case '/setup':
       return setup(await knownRepo(path))
@@ -87,6 +88,7 @@ async function route(url: URL) {
     case '/templates':
       return templates(await knownRepo(path))
     case '/runs':
+      await loadRuns(await findRepos(roots()))
       return listRuns()
     case '/runs/review':
       return reviewRun(url.searchParams.get('id'))
@@ -116,12 +118,17 @@ async function write(path: string, body: any, req: IncomingMessage) {
       return shareTodo(await knownRepo(body.repo))
     case '/runs/stop':
       return stopRun(body.id)
+    case '/runs/remove':
+      return removeRun(body.id)
     case '/runs/answer':
       return answerRun(body.id, body.allow === true)
     case '/orders/check':
       return checkOrders({ repos: await findRepos(roots()), api: self, now: body.now === true })
     case '/orders/run':
       return runOrder(await knownRepo(body.repo), orderBranch(body.branch), { tool: body.tool, model: body.model, sha: String(body.sha) }, { repos: await findRepos(roots()), api: self })
+    case '/orders/dismiss':
+      await dismissOrder(await knownRepo(body.repo), orderBranch(body.branch), body.sha)
+      return {}
     case '/orders/send':
       return sendOrder(await knownRepo(body.repo), orderBranch(body.branch), await findRepos(roots()))
     default:

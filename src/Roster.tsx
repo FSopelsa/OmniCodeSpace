@@ -3,9 +3,9 @@ import { dayRows, type RosterSession, type Row } from './roster.ts'
 import { describe, nextTime } from './rrule.ts'
 import { NeedsYou, type useOrders } from './Orders.tsx'
 import { RunList, RunPanel } from './Runs.tsx'
-import { Lamp, ago, clock, isLive, modelName, sessionName, useJson } from './ui.tsx'
+import { LAMP_LABEL, Lamp, ago, busiest, clock, modelName, sessionName, useJson } from './ui.tsx'
 
-type RosterData = { host: string; sessions: RosterSession[]; schedules: Schedule[] }
+type RosterData = { host: string; sessions: RosterSession[]; schedules: Schedule[]; logs: { files: number; unread: number } }
 
 const W = 1440
 const LEFT = 240
@@ -69,7 +69,7 @@ function Card({ row }: { row: Row }) {
   return (
     <li className="border-t border-rule py-3">
       <div className="flex items-baseline gap-2">
-        <Lamp on={row.sessions.some(isLive)} label={row.sessions.some(isLive) ? 'Active now' : undefined} />
+        <Lamp state={busiest(row.sessions)} label={LAMP_LABEL[busiest(row.sessions)]} />
         <b className="font-extrabold">{row.name}</b>
       </div>
       <div className="pl-5 text-ink-2">
@@ -108,6 +108,7 @@ export function Roster({ selected, onSelect, orders }: { selected?: string; onSe
       <section className="px-5 pb-4" aria-label="This PC">
         <h2 className="text-lg font-extrabold">This PC <span className="text-sm font-normal text-ink-2">{data.host}, {working.length === 1 ? '1 agent' : `${working.length} agents`} at work today</span></h2>
         {working.length === 0 && <p className="mt-1 text-ink-2">Nothing has run on this PC today yet.</p>}
+        {data.logs.unread > 0 && <p className="mt-1 text-ink-2">{data.logs.unread} of {data.logs.files} session logs couldn't be read. Claude Code or Codex may have changed their log format, so some chats may be missing.</p>}
         <ul className="grid gap-x-8 sm:grid-cols-2 xl:grid-cols-3">{working.map((r) => <Card key={r.key} row={r} />)}</ul>
       </section>
 

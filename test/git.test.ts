@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { after, before, test } from 'node:test'
-import { catchup, git, markSeen, repoDetail } from '../server/git.ts'
+import { catchup, findRepos, git, markSeen, repoDetail } from '../server/git.ts'
 
 let repo: string
 
@@ -81,4 +81,30 @@ test('seen refs are listed and bad agent names are refused', async () => {
   for (const bad of ['', '../main', '-x', 'a b', 'a..b']) {
     await assert.rejects(catchup(repo, bad), /Agent names use/)
   }
+})
+
+test('the brief lists every commit since the visit', async () => {
+  const seen = await markSeen(repo, 'shas-agent')
+  assert.deepEqual((await catchup(repo, 'shas-agent')).shas, [])
+  await commit('shas-1.txt', 'B')
+  const b = await git(repo, 'rev-parse', 'HEAD')
+  await commit('shas-2.txt', 'C')
+  const c = await git(repo, 'rev-parse', 'HEAD')
+  const brief = await catchup(repo, 'shas-agent')
+  assert.equal(brief.seen, seen)
+  assert.deepEqual(brief.shas, [c, b])
+  assert.deepEqual((await catchup(repo, 'never-seen')).shas, [])
+})
+
+test('repos are found two folders deep, but not inside run folders', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'omni-roots-'))
+  after(() => rmSync(root, { recursive: true, force: true }))
+  for (const dir of ['top', join('school', 'lesson1'), join('node_modules', 'x'), join('.cache', 'y')]) {
+    mkdirSync(join(root, dir), { recursive: true })
+    await git(join(root, dir), 'init', '-q')
+  }
+  // A worktree has a .git file, not a folder.
+  mkdirSync(join(root, 'top.worktrees', 'run-1'), { recursive: true })
+  writeFileSync(join(root, 'top.worktrees', 'run-1', '.git'), 'gitdir: elsewhere\n')
+  assert.deepEqual((await findRepos([root])).map((p) => relative(root, p)).sort(), [join('school', 'lesson1'), 'top'])
 })

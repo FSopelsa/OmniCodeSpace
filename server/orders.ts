@@ -28,6 +28,10 @@ export type Order = {
   note?: string
   // The report.md waiting to be sent back, so you can read it first.
   report?: string
+  // From an Omni-Model trailer, empty for the tool's default.
+  model: string
+  // Whether the order's commit is signed, in words.
+  signed: string
 }
 
 const ordersOn = (repo: string) => git(repo, 'config', '--get', 'omni.orders').then((v) => v === 'true', () => false)
@@ -49,7 +53,22 @@ async function fetchOrders(repo: string) {
 
 // Always with a separator, because without one git ends each value with a newline.
 const trailer = (key: string, field = 'contents:trailers') => `%(${field}:key=${key},valueonly,separator=%x2C)`
-const FORMAT = ['%(refname:lstrip=3)', '%(objectname)', '%(authorname)', '%(authordate:iso-strict)', trailer('Omni-Status'), trailer('Omni-To'), trailer('Omni-Ask')].join('%1f')
+const FORMAT = ['%(refname:lstrip=3)', '%(objectname)', '%(authorname)', '%(authordate:iso-strict)', trailer('Omni-Status'), trailer('Omni-To'), trailer('Omni-Ask'), trailer('Omni-Model')].join('%1f')
+
+// G is a good signature and N none. B means the commit doesn't match its signature. The rest need a key or trust this PC doesn't have.
+async function signature(repo: string, sha: string) {
+  const [code, signer] = (await git(repo, 'log', '-1', '--format=%G?%x1f%GS', sha).catch(() => '')).split('\x1f')
+  if (code === 'G') return `Signed by ${signer}`
+  if (code === 'N') return 'Not signed'
+  if (code === 'B') return "The signature doesn't match the commit"
+  return "Signed, but this PC can't check the signature"
+}
+
+// Hidden until the sender pushes again, because the ref holds the tip you dismissed.
+export async function dismissOrder(repo: string, branch: string, sha: unknown) {
+  if (typeof sha !== 'string' || !/^[0-9a-f]{40,64}$/.test(sha)) throw new Error("That isn't a commit id.")
+  await git(repo, 'update-ref', `refs/omni/dismissed/${branch}`, sha)
+}
 const contains = (repo: string, tip: string, ancestor: string) => git(repo, 'merge-base', '--is-ancestor', ancestor, tip).then(() => true, () => false)
 const statusAt = (repo: string, ref: string) => git(repo, 'log', '-1', `--format=${trailer('Omni-Status', 'trailers')}`, ref).catch(() => '')
 const REPORTED = ['done', 'failed', 'stopped']
@@ -66,9 +85,10 @@ export async function listOrders(repo: string, repos: string[]): Promise<Order[]
   const out = await git(repo, 'for-each-ref', `--format=${FORMAT}`, 'refs/remotes/origin/omni/orders', 'refs/remotes/origin/claude')
   const rows = out ? out.split('\n').map((line) => line.split('\x1f')) : []
   const live = listRuns().filter((r) => r.repo === repo && (r.status === 'running' || r.status === 'waiting'))
+  const dismissed = new Set((await git(repo, 'for-each-ref', '--format=%(refname:lstrip=3) %(objectname)', 'refs/omni/dismissed')).split('\n'))
   const orders: Order[] = []
-  for (const [branch, sha, author, date, status, to, ask] of rows) {
-    if (!ORDER_BRANCH.test(branch)) continue
+  for (const [branch, sha, author, date, status, to, ask, model] of rows) {
+    if (!ORDER_BRANCH.test(branch) || dismissed.has(`${branch} ${sha}`)) continue
     // A tip without a status is no order, unless this PC's branch ends in a report: then the sender committed on top of it.
     if (!status && !REPORTED.includes(await statusAt(repo, `refs/heads/${branch}`))) continue
     let state = await stateOf(repo, branch, sha, status)
@@ -87,7 +107,7 @@ export async function listOrders(repo: string, repos: string[]): Promise<Order[]
     const title = (text.split('\n').find((l) => l.trim()) ?? '').replace(/^[#\s]+/, '').slice(0, 120) || branch
     const run = live.find((r) => r.order?.branch === branch)?.id
     const report = state === 'ready' ? await git(repo, 'show', `refs/heads/${branch}:report.md`).catch(() => '') : undefined
-    orders.push({ repo, project: basename(repo), branch, state: run ? 'running' : state, to: to === 'Codex' ? 'Codex' : 'Claude Code', ask, title, text, author, date, sha, run, note, report })
+    orders.push({ repo, project: basename(repo), branch, state: run ? 'running' : state, to: to === 'Codex' ? 'Codex' : 'Claude Code', ask, title, text, author, date, sha, run, note, report, model, signed: await signature(repo, sha) })
   }
   return orders
 }
@@ -184,7 +204,7 @@ export async function checkOrders({ repos, api, now = false, cmd }: { repos: str
   if (question && !asking && !listRuns().some((r) => r.order?.ask && (r.status === 'running' || r.status === 'waiting'))) {
     asking = true
     try {
-      Object.assign(question, { state: 'running', run: (await runOrder(question.repo, question.branch, { tool: question.to, sha: question.sha }, { repos, api, cmd })).id })
+      Object.assign(question, { state: 'running', run: (await runOrder(question.repo, question.branch, { tool: question.to, model: question.model, sha: question.sha }, { repos, api, cmd })).id })
     } catch (e) {
       failed.set(question.sha, (e as Error).message)
       Object.assign(question, { state: 'blocked', note: (e as Error).message })

@@ -42,7 +42,7 @@ test('finds Codex automations and skips folders without a rule', async () => {
 })
 
 const session = (over: Partial<RosterSession>): RosterSession => ({
-  tool: 'Claude Code', id: 'x', log: '', title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '', project: 'shop', ...over,
+  tool: 'Claude Code', id: 'x', log: '', title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '', turnOver: false, project: 'shop', ...over,
 })
 
 test("today's rows group by agent and project, and clip work to the day", () => {

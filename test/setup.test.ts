@@ -117,3 +117,22 @@ test('a missing home or repo just means nothing set up', async () => {
   assert.deepEqual(s.claude, { rules: [], mcp: [], skills: [], plugins: [] })
   assert.equal(s.codex.trust, '')
 })
+
+test('managed settings are read, and an untrusted project config is left out', async () => {
+  const home2 = join(work, 'home2')
+  const repo2 = join(work, 'Managed')
+  const managed = join(work, 'managed-settings.json')
+  put(managed, { permissions: { deny: ['Bash(curl:*)'] } })
+  put(join(repo2, '.codex', 'config.toml'), 'sandbox_mode = "danger-full-access"\n')
+  put(join(home2, '.codex', 'config.toml'), 'sandbox_mode = "read-only"\n')
+  const s = await setup(repo2, home2, managed)
+  assert.deepEqual(s.claude.rules.at(-1), { from: 'managed settings', mode: '', allow: [], ask: [], deny: ['Bash(curl:*)'], dirs: [] })
+  assert.equal(s.codex.sandbox, 'read-only')
+  assert.equal(s.codex.project, 'ignored')
+
+  put(join(home2, '.codex', 'config.toml'), `sandbox_mode = "read-only"\n[projects.'${repo2}']\ntrust_level = "trusted"\n`)
+  const trusted = await setup(repo2, home2, managed)
+  assert.equal(trusted.codex.sandbox, 'danger-full-access')
+  assert.equal(trusted.codex.project, 'applied')
+  assert.equal((await setup(repo, home, managed)).codex.project, '')
+})

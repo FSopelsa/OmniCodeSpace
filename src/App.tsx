@@ -9,8 +9,8 @@ import { Roster } from './Roster.tsx'
 import { StartDialog } from './Runs.tsx'
 import { TodoView } from './Todo.tsx'
 import { Tracks } from './Tracks.tsx'
-import { AgentInfo, Names, agentRows } from './parts.tsx'
-import { Lamp, THEMES, ago, applyTheme, button, count, isLive, modelName, primary, savedTheme, sessionName, useJson, type Theme } from './ui.tsx'
+import { AgentInfo, Names, agentRows, usedHere } from './parts.tsx'
+import { LAMP_LABEL, Lamp, THEMES, ago, applyTheme, busiest, button, count, modelName, primary, savedTheme, sessionLamp, sessionName, useJson, type Theme } from './ui.tsx'
 
 type Summary = { name: string; path: string; branch: string; last: string; changed: number }
 type Detail = Summary & {
@@ -20,15 +20,12 @@ type Detail = Summary & {
   sessions: Session[]
   instructions: string[]
 }
-type Brief = { agent: string; seen: string; head: string; commits: number; files: number; briefTokens: number; projectTokens: number; text: string }
+type Brief = { agent: string; seen: string; head: string; commits: number; files: number; briefTokens: number; projectTokens: number; shas: string[]; text: string }
 
-function CatchUp({ repo }: { repo: Detail }) {
-  const [typed, setTyped] = useState('')
+// The brief is read once in RepoView, because Tracks shades the same commits it lists.
+function CatchUp({ repo, agent, typed, onType, data, error }: { repo: Detail; agent: string; typed: string; onType: (v: string) => void; data?: Brief; error?: string }) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const agent = typed || repo.seen[0]?.agent || 'me'
-  const url = `/api/catchup?path=${encodeURIComponent(repo.path)}&agent=${encodeURIComponent(agent)}`
-  const { data, error } = useJson<Brief>(url, 5000)
 
   const copy = async () => {
     if (!data) return
@@ -46,7 +43,7 @@ function CatchUp({ repo }: { repo: Detail }) {
             value={typed}
             placeholder={agent}
             list="known-agents"
-            onChange={(e) => setTyped(e.target.value)}
+            onChange={(e) => onType(e.target.value)}
             className="w-40 rounded-sm border border-ink-2 bg-transparent px-2 py-0.5 font-normal"
           />
         </label>
@@ -70,7 +67,8 @@ function CatchUp({ repo }: { repo: Detail }) {
 
 function Agents({ defs, runs }: { defs: AgentDef[]; runs: Session[] }) {
   const [open, setOpen] = useState('')
-  const rows = agentRows(defs, runs)
+  const all = agentRows(defs, runs)
+  const rows = usedHere(all)
 
   return (
     <>
@@ -80,7 +78,7 @@ function Agents({ defs, runs }: { defs: AgentDef[]; runs: Session[] }) {
         {rows.map(({ name, key, def, runs: mine }) => (
             <li key={key} className="border-t border-rule">
               <button onClick={() => setOpen(open === key ? '' : key)} aria-expanded={open === key} className="flex w-full items-baseline gap-2 py-2 text-left">
-                <Lamp on={mine.some(isLive)} />
+                <Lamp state={busiest(mine)} label={LAMP_LABEL[busiest(mine)]} />
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{name}</span>
                   <span className="block text-sm text-ink-2">
@@ -96,6 +94,7 @@ function Agents({ defs, runs }: { defs: AgentDef[]; runs: Session[] }) {
             </li>
         ))}
       </ul>
+      {all.length > rows.length && <p className="mt-1 text-sm text-ink-2">And {all.length - rows.length} more from your user settings and plugins, not used here.</p>}
     </>
   )
 }
@@ -129,13 +128,14 @@ function Scope({ setup }: { setup: Setup }) {
         <dd>Asks for approval: {codex.approval || 'not set'}</dd>
         {codex.network && <dd>Network inside the sandbox: {codex.network === 'true' ? 'on' : 'off'}</dd>}
         <dd>This project: {codex.trust || 'not trusted yet'}</dd>
+        {codex.project === 'ignored' && <dd>This project's .codex/config.toml is ignored until Codex trusts the project.</dd>}
       </dl>
       <div className="space-y-1 text-sm">
         <Names items={codex.mcp} label="MCP servers" />
         <Names items={codex.skills} label="skills" />
         <Names items={codex.plugins.map((name) => ({ name, from: 'enabled' }))} label="plugins" />
       </div>
-      <p className="mt-2 text-[12px] text-ink-2">Read from each tool's settings files. Connectors added in claude.ai and managed company settings aren't included.</p>
+      <p className="mt-2 text-[12px] text-ink-2">Read from each tool's settings files, including managed settings. Connectors added in claude.ai, the managed-settings.d folder and registry policies aren't included.</p>
     </>
   )
 }
@@ -164,7 +164,7 @@ function Inspector({ repo, commit }: { repo: Detail; commit?: Commit }) {
         {sessions.slice(0, 12).map((s) => (
           <li key={s.log} className="border-t border-rule">
             <button onClick={() => setOpenId(openId === s.log ? '' : s.log)} aria-expanded={openId === s.log} className="flex w-full items-baseline gap-2 py-2 text-left">
-              <Lamp on={isLive(s)} />
+              <Lamp state={sessionLamp(s)} label={LAMP_LABEL[sessionLamp(s)]} />
               <span className="min-w-0">
                 <span className="block truncate font-semibold">{sessionName(s)}</span>
                 <span className="block text-sm text-ink-2">{s.tool}{s.agent && ` as ${s.agent}`}, {ago(s.last)}</span>
@@ -199,6 +199,9 @@ function Inspector({ repo, commit }: { repo: Detail; commit?: Commit }) {
 function RepoView({ path }: { path: string }) {
   const { data: repo, error } = useJson<Detail>(`/api/repo?path=${encodeURIComponent(path)}`, 5000)
   const [sha, setSha] = useState<string>()
+  const [typed, setTyped] = useState('')
+  const agent = typed || repo?.seen[0]?.agent || 'me'
+  const { data: brief, error: briefError } = useJson<Brief>(repo ? `/api/catchup?path=${encodeURIComponent(repo.path)}&agent=${encodeURIComponent(agent)}` : null, 5000)
   if (error) return <p className="p-5">{error}</p>
   if (!repo) return <p className="p-5 text-ink-2">Reading {path}</p>
   const commit = repo.commits.find((c) => c.sha === sha)
@@ -214,9 +217,9 @@ function RepoView({ path }: { path: string }) {
         {repo.commits.length === 0 ? (
           <p className="bg-panel p-5">This repo has no commits yet. Tracks appear after the first commit.</p>
         ) : (
-          <Tracks commits={repo.commits} sessions={repo.sessions.filter((s) => !s.parent)} seen={repo.seen[0]?.sha} selected={sha} onSelect={setSha} />
+          <Tracks commits={repo.commits} sessions={repo.sessions.filter((s) => !s.parent)} seen={brief?.seen || undefined} fresh={brief?.shas ?? []} selected={sha} onSelect={setSha} />
         )}
-        <CatchUp repo={repo} />
+        <CatchUp repo={repo} agent={agent} typed={typed} onType={setTyped} data={brief} error={briefError} />
         <table className="mx-5 my-3 w-[calc(100%-2.5rem)] border-collapse">
           <tbody>
             {repo.commits.slice(0, 40).map((c) => (

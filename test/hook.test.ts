@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
-import { enable } from '../server/enable.ts'
-import { git } from '../server/git.ts'
+import { disable, enable } from '../server/enable.ts'
+import { git, markSeen } from '../server/git.ts'
 
 const CLI = join(import.meta.dirname, '..', 'server', 'cli.ts')
 const work = mkdtempSync(join(tmpdir(), 'omni-hook-'))
@@ -179,4 +179,48 @@ test('enable leaves a broken settings file alone', async () => {
   assert.equal(readFileSync(settings, 'utf8'), '{ not json')
   assert.ok(!existsSync(join(other, 'AGENTS.md')))
   await assert.rejects(enable(work), /not a git repository/)
+})
+
+async function freshRepo(name: string) {
+  const dir = join(work, name)
+  mkdirSync(dir)
+  await git(dir, 'init', '-b', 'main')
+  writeFileSync(join(dir, 'a.txt'), 'a\n')
+  await git(dir, 'add', '.')
+  await git(dir, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'First')
+  return dir
+}
+
+test('disable undoes enable and leaves your own hooks and text', async () => {
+  const dir = await freshRepo('undo')
+  const settings = join(dir, '.claude', 'settings.local.json')
+  mkdirSync(join(dir, '.claude'))
+  writeFileSync(settings, JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'mine' }] }] } }))
+  writeFileSync(join(dir, 'AGENTS.md'), '# House rules\n\nBe kind.\n')
+  await enable(dir, { orders: true })
+  await markSeen(dir, 'someone')
+  await git(dir, 'update-ref', 'refs/omni/chats/claude-code/chat-1', 'HEAD')
+
+  const { kept, changed } = await disable(dir)
+  assert.deepEqual(kept, [])
+  assert.ok(changed.length > 0)
+  assert.equal(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), '# House rules\n\nBe kind.\n')
+  assert.ok(!existsSync(join(dir, 'CLAUDE.md')))
+  assert.deepEqual(JSON.parse(readFileSync(settings, 'utf8')).hooks.SessionStart.map((g: any) => g.hooks[0].command), ['mine'])
+  assert.equal(await git(dir, 'for-each-ref', 'refs/omni'), '')
+  assert.equal(await git(dir, 'config', '--get', 'alias.omni').catch(() => ''), '')
+  assert.equal(await git(dir, 'config', '--get', 'omni.orders').catch(() => ''), '')
+  assert.deepEqual((await disable(dir)).changed, [])
+})
+
+test("disable leaves a note it didn't write", async () => {
+  const dir = await freshRepo('edited')
+  await enable(dir)
+  appendFileSync(join(dir, 'AGENTS.md'), 'Also: our team ticks items on Fridays.\n')
+  assert.deepEqual((await disable(dir)).kept, ['AGENTS.md: ## To-do list'])
+  const left = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
+  assert.match(left, /ticks items on Fridays/)
+  assert.doesNotMatch(left, /## For agents working here/)
+  // The settings file held only this tool's hook, so it goes.
+  assert.ok(!existsSync(join(dir, '.claude', 'settings.local.json')))
 })

@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 import { api, token } from '../server/api.ts'
-import { git } from '../server/git.ts'
-import { command, describe, listRuns, reviewRun, startRun, stopRun, watchRun, type Run } from '../server/runs.ts'
+import { git, rev } from '../server/git.ts'
+import { checkQuiet, command, describe, listRuns, loadRuns, removeRun, reviewRun, startRun, stopRun, watchRun, type Run } from '../server/runs.ts'
 
 const GATE = join(import.meta.dirname, '..', 'server', 'gate.ts')
 const root = mkdtempSync(join(tmpdir(), 'omni-runs-'))
@@ -205,4 +205,90 @@ test('starting a run checks its input, and needs the token', async () => {
   assert.equal((await start({ repo: root })).status, 404)
   const events = await fetch(`${address()}/runs/events?id=nope`)
   assert.equal(events.status, 404)
+})
+
+test('run records survive a restart, and a damaged one is skipped', async () => {
+  const store = join(repo, '.git', 'omni', 'runs')
+  const run = await startRun(repo, { tool: 'Claude Code', task: 'save me' }, address(), fake('quick'))
+  const done = await until(run.id, (r) => r.status === 'finished')
+  assert.equal(JSON.parse(readFileSync(join(store, `${done.id}.json`), 'utf8')).status, 'finished')
+  writeFileSync(join(store, 'aaaaaa.json'), JSON.stringify({ ...done, id: 'aaaaaa', status: 'running' }))
+  writeFileSync(join(store, 'bbbbbb.json'), '{"id": "bbbb')
+  await loadRuns([repo])
+  assert.equal(listRuns().find((r) => r.id === 'aaaaaa')?.status, 'stopped')
+  assert.match(watchRun('aaaaaa', () => {}).run.lines.at(-1)!.text, /^The server restarted during this run/)
+  assert.ok(!listRuns().some((r) => r.id === 'bbbbbb'))
+})
+
+test('a quiet run gets one warning', async () => {
+  const run = await startRun(repo, { tool: 'Claude Code', task: 'hang' }, address(), fake('hang'))
+  await until(run.id, (r) => r.lines.length > 0)
+  checkQuiet(Date.now() + 11 * 60_000)
+  checkQuiet(Date.now() + 12 * 60_000)
+  assert.equal(watchRun(run.id, () => {}).run.lines.filter((l) => l.text.startsWith('No output for 10 minutes')).length, 1)
+  stopRun(run.id)
+  await until(run.id, (r) => r.status === 'stopped')
+})
+
+const commit = (dir: string, file: string, text: string) =>
+  (writeFileSync(join(dir, file), text), git(dir, 'add', file).then(() => git(dir, '-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', `Change ${file}`)))
+
+test('review says whether the branch merges cleanly', async () => {
+  const run = await startRun(repo, { tool: 'Claude Code', task: 'conflict' }, address(), fake('quick'))
+  await until(run.id, (r) => r.status === 'finished')
+  await commit(run.worktree, 'a.txt', 'from the run\n')
+  assert.deepEqual((await reviewRun(run.id)).merge, { into: 'main', conflicts: [] })
+  await commit(repo, 'a.txt', 'from main\n')
+  assert.deepEqual((await reviewRun(run.id)).merge, { into: 'main', conflicts: ['a.txt'] })
+  await git(repo, 'checkout', '-q', '--detach')
+  assert.equal((await reviewRun(run.id)).merge, null)
+  await git(repo, 'checkout', '-q', 'main')
+})
+
+test("a finished run's folder can be removed, never with uncommitted work, and its branch stays", async () => {
+  const hung = await startRun(repo, { tool: 'Claude Code', task: 'busy' }, address(), fake('hang'))
+  await assert.rejects(removeRun(hung.id), /Stop it first/)
+  stopRun(hung.id)
+  await until(hung.id, (r) => r.status === 'stopped')
+
+  const run = await startRun(repo, { tool: 'Claude Code', task: 'tidy' }, address(), fake('quick'))
+  await until(run.id, (r) => r.status === 'finished')
+  writeFileSync(join(run.worktree, 'left.txt'), 'mine\n')
+  await assert.rejects(removeRun(run.id), /uncommitted changes/)
+  assert.ok(existsSync(join(run.worktree, 'left.txt')))
+  rmSync(join(run.worktree, 'left.txt'))
+  await removeRun(run.id)
+  assert.ok(!existsSync(run.worktree))
+  assert.ok(await rev(repo, `refs/heads/${run.branch}`))
+  assert.ok(!listRuns().some((r) => r.id === run.id))
+  assert.ok(!existsSync(join(repo, '.git', 'omni', 'runs', `${run.id}.json`)))
+})
+
+test('a Claude Code run says which login it bills', async () => {
+  const first = async () => {
+    const run = await startRun(repo, { tool: 'Claude Code', task: 'who pays' }, address(), fake('quick'))
+    return (await until(run.id, (r) => r.status === 'finished')).lines[0].text
+  }
+  const key = process.env.ANTHROPIC_API_KEY
+  delete process.env.ANTHROPIC_API_KEY
+  assert.equal(await first(), 'Uses your Claude Code login.')
+  process.env.ANTHROPIC_API_KEY = 'test-key'
+  assert.equal(await first(), 'Bills your API key, because ANTHROPIC_API_KEY is set.')
+  if (key === undefined) delete process.env.ANTHROPIC_API_KEY
+  else process.env.ANTHROPIC_API_KEY = key
+})
+
+test('a record with odd fields is skipped, and a run another live server owns stays hidden', async (t) => {
+  const store = join(repo, '.git', 'omni', 'runs')
+  const [sample] = listRuns()
+  writeFileSync(join(store, 'dddddd.json'), JSON.stringify({ ...sample, id: 'dddddd', started: 1, lines: [] }))
+  const other = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'])
+  t.after(() => other.kill())
+  writeFileSync(join(store, 'eeeeee.json'), JSON.stringify({ ...sample, id: 'eeeeee', status: 'running', lines: [], server: other.pid }))
+  await loadRuns([repo])
+  assert.ok(!listRuns().some((r) => r.id === 'dddddd' || r.id === 'eeeeee'))
+  other.kill()
+  await new Promise((resolve) => other.on('exit', resolve))
+  await loadRuns([repo])
+  assert.equal(listRuns().find((r) => r.id === 'eeeeee')?.status, 'stopped')
 })

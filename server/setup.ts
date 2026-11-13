@@ -102,6 +102,9 @@ export function toml(text: string) {
   return tables
 }
 
+const tablesOf = (config: Map<string, Record<string, string>>, first: string) =>
+  [...config].map(([name, values]) => ({ path: keyPath(name), values })).filter((t) => t.path.length === 2 && t.path[0] === first)
+
 const names = (servers: unknown, from: string): Named[] => (servers && typeof servers === 'object' ? Object.keys(servers).map((name) => ({ name, from })) : [])
 
 async function folders(dir: string) {
@@ -153,12 +156,21 @@ async function claudePlugins(repo: string, home: string, settings: any[]) {
     })
 }
 
+// Where an administrator puts settings that override everyone's (code.claude.com/docs/en/managed-settings).
+// shortcut: the managed-settings.d folder and registry policies aren't read, add them when a managed PC needs it.
+const MANAGED =
+  process.platform === 'win32' ? 'C:/Program Files/ClaudeCode/managed-settings.json'
+  : process.platform === 'darwin' ? '/Library/Application Support/ClaudeCode/managed-settings.json'
+  : '/etc/claude-code/managed-settings.json'
+
 // What agents are defined for this repo, and what they can touch. Only names leave this function, never MCP commands, arguments or environment values.
-export async function setup(repo: string, home = homedir()) {
+export async function setup(repo: string, home = homedir(), managed = MANAGED) {
+  // Last, because managed settings override the rest.
   const sources = [
     ['user settings', join(home, '.claude', 'settings.json')],
     ['project settings', join(repo, '.claude', 'settings.json')],
     ['local settings', join(repo, '.claude', 'settings.local.json')],
+    ['managed settings', managed],
   ]
   const settings = await Promise.all(sources.map(([, file]) => readJson(file)))
   const plugins = await claudePlugins(repo, home, settings)
@@ -180,10 +192,11 @@ export async function setup(repo: string, home = homedir()) {
   )
 
   const codexConfig = toml(await readText(join(home, '.codex', 'config.toml')))
-  const codexProject = toml(await readText(join(repo, '.codex', 'config.toml')))
+  const trust = tablesOf(codexConfig, 'projects').find((t) => normal(t.path[1]) === normal(repo))?.values.trust_level ?? ''
+  // Codex applies a project's own config only once you trust the project.
+  const projectText = await readText(join(repo, '.codex', 'config.toml'))
+  const codexProject = toml(trust === 'trusted' ? projectText : '')
   const codexTop = { ...codexConfig.get(''), ...codexProject.get('') }
-  const tablesOf = (config: Map<string, Record<string, string>>, first: string) =>
-    [...config].map(([name, values]) => ({ path: keyPath(name), values })).filter((t) => t.path.length === 2 && t.path[0] === first)
 
   const agents = (
     await Promise.all([
@@ -213,7 +226,8 @@ export async function setup(repo: string, home = homedir()) {
       sandbox: codexTop.sandbox_mode ?? '',
       approval: codexTop.approval_policy ?? '',
       network: (codexProject.get('sandbox_workspace_write') ?? codexConfig.get('sandbox_workspace_write'))?.network_access ?? '',
-      trust: tablesOf(codexConfig, 'projects').find((t) => normal(t.path[1]) === normal(repo))?.values.trust_level ?? '',
+      trust,
+      project: (projectText ? (trust === 'trusted' ? 'applied' : 'ignored') : '') as 'applied' | 'ignored' | '',
       mcp: [...tablesOf(codexConfig, 'mcp_servers').map((t) => ({ name: t.path[1], from: 'user config' })), ...tablesOf(codexProject, 'mcp_servers').map((t) => ({ name: t.path[1], from: 'project config' }))],
       skills: (await Promise.all([skillsIn(join(repo, '.agents', 'skills'), 'project'), skillsIn(join(home, '.agents', 'skills'), 'user'), skillsIn(join(home, '.codex', 'skills'), 'user')])).flat(),
       plugins: tablesOf(codexConfig, 'plugins').filter((t) => t.values.enabled === 'true').map((t) => t.path[1]),

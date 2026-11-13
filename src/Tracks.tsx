@@ -2,23 +2,25 @@ import { useEffect, useRef } from 'react'
 import type { Commit } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
 import { layout } from './lanes.ts'
+import { HALO, sessionLamp } from './ui.tsx'
 
 const STEP = 40
 const LANE = 48
 const PAD = 48
 const COLORS = ['var(--color-ink)', 'var(--color-a1)', 'var(--color-a2)', 'var(--color-a3)', 'var(--color-a4)']
-const ACTIVE_MS = 10 * 60 * 1000
 
 type Props = {
   commits: Commit[]
   sessions: Session[]
   seen?: string
+  // The commits the chosen agent hasn't seen, each shaded.
+  fresh: string[]
   selected?: string
   onSelect: (sha: string) => void
 }
 
 // shortcut: commits whose parent is older than the 60-commit window just end, draw a stub if that ever confuses.
-export function Tracks({ commits, sessions, seen, selected, onSelect }: Props) {
+export function Tracks({ commits, sessions, seen, fresh, selected, onSelect }: Props) {
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     box.current?.scrollTo({ left: box.current.scrollWidth })
@@ -58,12 +60,11 @@ export function Tracks({ commits, sessions, seen, selected, onSelect }: Props) {
           </pattern>
         </defs>
         <rect width="100%" height={height} fill="url(#tile)" />
-        {seenAt && (
-          <g>
-            <rect x={px(seenAt.x)} width="100%" height={height} fill="var(--color-since)" />
-            <path d={`M${px(seenAt.x)} 0V${height}`} stroke="var(--color-ink)" strokeWidth="1.5" strokeDasharray="5 5" />
-          </g>
-        )}
+        {fresh.map((sha) => {
+          const p = at.get(sha)
+          return p && <rect key={sha} x={px(p.x) - STEP / 2} width={STEP} height={height} fill="var(--color-since)" />
+        })}
+        {seenAt && <path d={`M${px(seenAt.x)} 0V${height}`} stroke="var(--color-ink)" strokeWidth="1.5" strokeDasharray="5 5" />}
 
         {edges.map((e) => {
           const a = at.get(e.from)!
@@ -91,14 +92,14 @@ export function Tracks({ commits, sessions, seen, selected, onSelect }: Props) {
         })}
 
         {labels.map(({ c, p, session, name }) => {
-          const live = session && Date.now() - Date.parse(session.last) < ACTIVE_MS
+          const lamp = session ? sessionLamp(session) : 'off'
           return (
             <g key={c.sha} fontSize="13">
-              <text x={px(p.x)} y={py(p.lane) - 14} fill="var(--color-ink)" fontWeight="700">{c.refs[0]}</text>
+              <text x={px(p.x)} y={py(p.lane) - 14} fill="var(--color-ink)" fontWeight="700" {...HALO}>{c.refs[0]}</text>
               {session && (
                 <g>
-                  <circle cx={px(p.x) + 22} cy={py(p.lane)} r="8" fill={live ? 'var(--color-run)' : 'var(--color-sheet)'} stroke="var(--color-ink)" strokeWidth="2.5" />
-                  <text x={px(p.x) + 36} y={py(p.lane) + 5} fill="var(--color-ink)" fontWeight="700">{name}</text>
+                  <circle cx={px(p.x) + 22} cy={py(p.lane)} r="8" fill={lamp === 'off' ? 'var(--color-sheet)' : `var(--color-${lamp})`} stroke="var(--color-ink)" strokeWidth="2.5" />
+                  <text x={px(p.x) + 36} y={py(p.lane) + 5} fill="var(--color-ink)" fontWeight="700" {...HALO}>{name}</text>
                 </g>
               )}
             </g>
