@@ -11,11 +11,11 @@ A local workspace for coding agents and the people running them, with git as the
 - Finds the git repos in your projects folder and draws each one's recent branches and commits.
 - Lists the Claude Code and Codex sessions that ran in each project, with model, branch and token use, read from the logs those tools already keep.
 - Lists the agents defined for each project, from Claude Code, Codex and enabled plugins, with their instructions, tools and the runs that used them.
-- Shows what agents can touch in each project: permission rules, sandbox and approval settings, MCP servers, skills and plugins.
+- Shows what agents can touch in each project: permission rules, including an administrator's managed settings, sandbox and approval settings, MCP servers, skills and plugins. A project's Codex config counts only once Codex trusts the project, as in Codex itself.
 - Shows which instruction files a project gives its agents.
-- Writes a catch-up brief for a returning agent: commits, changed files, uncommitted work and unmerged branches since its last visit.
+- Writes a catch-up brief for a returning agent: commits, changed files, uncommitted work and unmerged branches since its last visit. The tracks shade exactly the commits that agent hasn't seen.
 - Delivers that brief automatically when a Claude Code or Codex session starts, and asks agents to sign their commits with who and why.
-- **Roster:** today's work on this PC as a timetable, one row per agent and project, with scheduled Codex automations and their next run.
+- **Roster:** today's work on this PC as a timetable, one row per agent and project, with scheduled Codex automations and their next run. A green lamp means a chat is working, and amber means it's your turn.
 - **Map:** one project as the hub of everything that works on it: worktrees, Claude Code, Codex and their agents, remotes. Select a node for its models, plugins, MCP servers, skills, instruction files and tech stack.
 - **Start an agent:** runs Claude Code or Codex on a task in a new branch and folder, streams its output, can stop it, waits for your click before Claude Code pushes, and shows the branch for review.
 - **Orders:** takes tasks that agents elsewhere push as git branches, runs them after your click, and sends a report back on the same branch. Read-only questions about another project start by themselves.
@@ -37,7 +37,7 @@ npm install
 npm run dev
 ```
 
-Then open http://127.0.0.1:5173. Pick a theme in the header: Day, or the dark themes Night, Blueprint and Graphite. Until you pick one, it follows your system's light or dark setting. It looks in `~/IdeaProjects` by default. To use other folders, set `OMNI_ROOTS` to a list separated by `;` on Windows or `:` elsewhere.
+Then open http://127.0.0.1:5173. Pick a theme in the header: Day, or the dark themes Night, Blueprint and Graphite. Until you pick one, it follows your system's light or dark setting. It looks for repos in `~/IdeaProjects` by default, up to two folders down, skipping hidden folders, `node_modules` and run folders. To use other folders, set `OMNI_ROOTS` to a list separated by `;` on Windows or `:` elsewhere.
 
 ## Catching up agents automatically
 
@@ -58,16 +58,18 @@ From then on, a new or resumed Claude Code or Codex session in that repo is told
 
 Review `AGENTS.md` and `CLAUDE.md`, and commit them if you want to keep the rules.
 
-To turn it off, remove the hook and the notes, then run:
+To turn it off again:
 
 ```bash
-git config --local --unset alias.omni
+node path/to/OmniCodeSpace/server/cli.ts disable --repo path/to/your/repo
 ```
+
+This removes the hook, the alias, the orders setting, every ref under `refs/omni/` and the notes `enable` added. A note you edited stays, and the command names it.
 
 ### How it decides what's new
 
 - Each tool has a last-seen pointer, stored as a git ref at `refs/omni/seen/<name>`. A normal `git push` doesn't send refs there.
-- A resumed Claude Code chat also has its own pointer under `refs/omni/chats/`, so it hears about changes that another chat already moved past. Each chat leaves one small ref behind.
+- A resumed Claude Code chat also has its own pointer under `refs/omni/chats/`, so it hears about changes that another chat already moved past. Each chat leaves one small ref behind, which `disable` removes.
 - When Claude Code reports that a resumed chat's prompt cache has likely expired, the hook also shows you a message suggesting a new chat. Your next message in the old chat would pay to cache its whole history again, and a new chat only needs the brief.
 - A brief is capped at 9,500 characters, and it tells the agent to treat commit messages as information, not instructions.
 
@@ -98,10 +100,11 @@ Select **Start an agent**, pick a project and a tool, and describe the task. The
 - **Claude Code** runs as `claude -p`. It may edit files and commit in that folder without asking. Other commands follow your own Claude Code permission rules, and the run lists any they refused.
 - **Pushing waits for you.** When Claude Code tries to push, the run turns amber and shows the command, with **Allow push** and **Refuse**. No answer within 9 minutes counts as Refuse.
 - **Codex** runs as `codex exec` in its `workspace-write` sandbox, with the network off, so it can't push. The sandbox also keeps `.git` read-only, so its changes stay uncommitted for you to review and commit. Codex itself also marks the project as trusted in `~/.codex/config.toml` the first time.
-- **Live output and stop.** The Roster tab lists runs started from here. Select one for its output, a stop button, and, once it ends, its commits and diff.
-- **Cleaning up.** Merge or push the branch yourself when you're happy, then remove the folder with `git worktree remove <folder>`.
+- **Live output and stop.** The Roster tab lists runs started from here. Select one for its output, a stop button, and, once it ends, its commits and diff. A run that prints nothing for 10 minutes says so, since a tool that can't reach its API waits silently.
+- **Kept across restarts.** Each run is saved in the project's `.git/omni/runs/` folder, so the Roster lists it again after the app restarts. A run that was still going then shows as stopped, and its branch and folder hold what it did.
+- **Cleaning up.** Merge or push the branch yourself when you're happy. The review says whether it merges cleanly into your current branch, and lists the files that conflict. **Remove folder** then deletes the run's folder and its record, and keeps the branch. It refuses a folder with uncommitted changes. Files your `.gitignore` skips, such as `node_modules`, go with the folder.
 
-The app finds `claude` on your PATH, and Codex inside the Codex desktop app's folder or on your PATH. Set `OMNI_CLAUDE` or `OMNI_CODEX` to use other copies. Runs use your own login for each tool. Anthropic's terms don't clearly say whether scripting Claude Code with a subscription is allowed, so read them yourself, and see the hurdles in [docs/PLAN.md](docs/PLAN.md).
+The app finds `claude` on your PATH, and Codex inside the Codex desktop app's folder or on your PATH. Set `OMNI_CLAUDE` or `OMNI_CODEX` to use other copies. Runs use your own login for each tool, and a Claude Code run's first line says whether it uses your login or bills `ANTHROPIC_API_KEY`. Anthropic's terms don't clearly say whether scripting Claude Code with a subscription is allowed, so read them yourself, and see the hurdles in [docs/PLAN.md](docs/PLAN.md).
 
 The push check is a guardrail against mistakes, not a sandbox. It reads the command an agent runs, so a push from inside a script isn't caught.
 
@@ -124,11 +127,13 @@ Omni-To: Claude Code
 Omni-Status: open
 ```
 
-`Omni-To: Codex` picks Codex instead. A branch whose newest commit has no `Omni-Status` trailer isn't an order.
+`Omni-To: Codex` picks Codex instead, and `Omni-Model: <name>` picks a model, such as `haiku`. A branch whose newest commit has no `Omni-Status` trailer isn't an order.
 
 **What happens here:**
 
 - **Checking.** While the app is open, it fetches order branches from `origin` at most every 5 minutes, and lists them under **Needs you** in the Roster. **Check now** fetches at once. Orders don't arrive while the app is closed.
+- **Signed or not.** Each order says whether its commit is signed, and by whom, as far as this PC's git can check.
+- **Dismiss** hides an order until its sender pushes to the branch again.
 - **Run** shows the order's text and starts Claude Code or Codex on the order's own branch, in a folder beside the project, like any other run. If the sender changed the order after you opened it, Run refuses, so a run never starts on text you haven't read. Pushes still wait for your click.
 - **The report.** When the agent ends, the app commits a `report.md` holding the outcome and the agent's last message, with `Omni-Status: done`, `failed` or `stopped`. Needs you shows the report before you send it.
 - **Send back** pushes the branch to `origin`, never forced. If the sender pushed again in the meantime, the push is refused and nothing is lost. Sort the branch out in git.
@@ -136,12 +141,12 @@ Omni-Status: open
 
 **Questions.** Adding `Omni-Ask: <project folder>` turns an order into a read-only question about another project under your roots, which must also have orders turned on.
 
-- A question for Claude Code starts by itself, without a click, one at a time, in that project's own checkout. Claude Code runs with only its Read, Grep and Glob tools, and without your settings, hooks or MCP servers. It uses the tool's default model.
+- A question for Claude Code starts by itself, without a click, one at a time, in that project's own checkout. Claude Code runs with only its Read, Grep and Glob tools, and without your settings, hooks or MCP servers. It uses the model named in `Omni-Model:`, or the tool's default.
 - A question for Codex waits for your click. Its `read-only` sandbox hasn't been checked on a real run here, and it can read outside the project.
 - Sending the answer back still needs your click.
 - Anyone who can push to the repo can spend your Claude Code usage on questions. Turn orders on only where you trust everyone with push access.
 
-**Leftovers.** Merging an order branch brings its `order.md` and `report.md` along. Order folders stay until you remove them with `git worktree remove <folder>`. To drop an order, delete its branch on the remote.
+**Leftovers.** Merging an order branch brings its `order.md` and `report.md` along. Order folders stay until you use **Remove folder** in the run's review. To drop an order for good, delete its branch on the remote.
 
 ## The to-do list
 

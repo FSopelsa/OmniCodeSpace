@@ -28,6 +28,9 @@ export function agentRows(defs: AgentDef[], runs: Session[]) {
   ]
 }
 
+// Agents from your user folder and plugins appear in every repo, so a project shows only its own and the ones that ran there.
+export const usedHere = (rows: ReturnType<typeof agentRows>) => rows.filter((r) => r.runs.length > 0 || r.def?.from === 'project')
+
 export function AgentInfo({ def, runs }: { def?: AgentDef; runs: Session[] }) {
   return (
     <>

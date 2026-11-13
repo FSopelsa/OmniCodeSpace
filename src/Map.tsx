@@ -2,8 +2,8 @@ import { useState, type KeyboardEvent } from 'react'
 import type { Worktree } from '../server/git.ts'
 import type { Session } from '../server/sessions.ts'
 import type { Setup } from '../server/setup.ts'
-import { AgentInfo, Names, SessionList, agentRows } from './parts.tsx'
-import { ago, isLive, modelName, useJson } from './ui.tsx'
+import { AgentInfo, Names, SessionList, agentRows, usedHere } from './parts.tsx'
+import { HALO, ago, isLive, modelName, useJson } from './ui.tsx'
 
 type Repo = { name: string; path: string; branch: string; changed: number; sessions: Session[]; worktrees: Worktree[]; instructions: string[] }
 type MapData = {
@@ -15,8 +15,6 @@ type Leaf = { id: string; label: string; sub: string; live: boolean }
 const HUB = { x: 515, y: 330 }
 const TOOL_X = 330
 const LEAF_X = 104
-// A pale outline behind each label keeps it readable where it crosses a line.
-const HALO = { stroke: 'var(--color-sheet)', strokeWidth: 4, paintOrder: 'stroke', strokeLinejoin: 'round' } as const
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
 function Node({ id, x, y, r, label, sub, live, dim, selected, onSelect, labelAt = 'below' }: { id: string; x: number; y: number; r: number; label: string; sub?: string; live?: boolean; dim?: boolean; selected: string; onSelect: (id: string) => void; labelAt?: 'below' | 'right' }) {
@@ -177,7 +175,7 @@ export function MapView({ path }: { path: string }) {
   const top = repo.sessions.filter((s) => !s.parent)
   const rows = setup ? agentRows(setup.agents, repo.sessions) : []
   // Agents from user-level plugins are offered in every project, so only ones defined here or with runs here go on the map.
-  const leavesOf = (tool: string): Leaf[] => rows.filter((r) => r.tool === tool && (r.runs.length > 0 || r.def?.from === 'project')).map((r) => ({ id: `agent:${r.key}`, label: r.name, sub: `${r.runs.length} runs`, live: r.runs.some(isLive) }))
+  const leavesOf = (tool: string): Leaf[] => usedHere(rows).filter((r) => r.tool === tool).map((r) => ({ id: `agent:${r.key}`, label: r.name, sub: `${r.runs.length} runs`, live: r.runs.some(isLive) }))
   const toolSub = (tool: string) => {
     const models = counted(top.filter((s) => s.tool === tool))
     return models.length ? cut(models[0][0], 26) : 'no chats here yet'

@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, before, test } from 'node:test'
 import { git, rev } from '../server/git.ts'
-import { ORDER_BRANCH, checkOrders, listOrders, runOrder, sendOrder } from '../server/orders.ts'
-import { watchRun, type Run } from '../server/runs.ts'
+import { ORDER_BRANCH, checkOrders, dismissOrder, listOrders, runOrder, sendOrder } from '../server/orders.ts'
+import { listRuns, watchRun, type Run } from '../server/runs.ts'
 
 Object.assign(process.env, { GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' })
 const root = mkdtempSync(join(tmpdir(), 'omni-orders-'))
@@ -246,4 +246,25 @@ test('a Codex question waits for your click', async () => {
   assert.equal(q.state, 'open')
   assert.equal(q.run, undefined)
   assert.match(q.note!, /click/)
+})
+
+test('a dismissed order stays hidden until its sender pushes again', async () => {
+  await push('omni/orders/d1', 'Do a thing', 'Omni-To: Claude Code', 'Omni-Status: open')
+  const order = (await checkOrders({ repos, api, now: true, cmd: fake })).orders.find((o) => o.branch === 'omni/orders/d1')!
+  await dismissOrder(shop, 'omni/orders/d1', order.sha)
+  assert.ok(!(await listOrders(shop, repos)).some((o) => o.branch === 'omni/orders/d1'))
+  await assert.rejects(dismissOrder(shop, 'omni/orders/d1', '--all'), /commit/)
+  await push('omni/orders/d1', 'Do a thing, again', 'Omni-To: Claude Code', 'Omni-Status: open')
+  const back = (await checkOrders({ repos, api, now: true, cmd: fake })).orders.find((o) => o.branch === 'omni/orders/d1')
+  assert.equal(back?.title, 'Do a thing, again')
+})
+
+test('a question runs with the model its sender named, and unsigned orders say so', async () => {
+  await push('omni/orders/q-model', 'Which framework?', 'Omni-To: Claude Code', 'Omni-Status: open', 'Omni-Ask: docs', 'Omni-Model: haiku')
+  const order = (await checkOrders({ repos, api, now: true, cmd: [process.execPath, [agent, 'read']] })).orders.find((o) => o.branch === 'omni/orders/q-model')!
+  assert.equal(order.model, 'haiku')
+  assert.equal(order.signed, 'Not signed')
+  const run = listRuns().find((r) => r.order?.branch === 'omni/orders/q-model')!
+  assert.equal(run.model, 'haiku')
+  await until(run.id, (r) => r.status === 'finished')
 })

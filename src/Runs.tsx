@@ -4,7 +4,7 @@ import type { Line, Run, Tool } from '../server/runs.ts'
 import { Lamp, ago, button, clock, post, primary, useJson } from './ui.tsx'
 
 type Repo = { name: string; path: string }
-type Review = { commits: string[]; uncommitted: string[]; diff: string }
+type Review = { commits: string[]; uncommitted: string[]; diff: string; merge: { into: string; conflicts: string[] } | null }
 
 const STATUS: Record<Run['status'], string> = { running: 'Working', waiting: 'Waiting for you', finished: 'Finished', failed: 'Failed', stopped: 'Stopped' }
 const lampOf = (run: Run) => (run.status === 'waiting' ? 'wait' : run.status === 'running' ? 'run' : 'off')
@@ -15,7 +15,7 @@ export function StartDialog({ repos, current, order, onClose, onStarted }: { rep
   const ref = useRef<HTMLDialogElement>(null)
   const [repo, setRepo] = useState(order?.repo ?? current ?? repos[0]?.path ?? '')
   const [tool, setTool] = useState<Tool>(order?.to ?? 'Claude Code')
-  const [model, setModel] = useState('')
+  const [model, setModel] = useState(order?.model ?? '')
   const [task, setTask] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -153,9 +153,10 @@ export function RunPanel({ id, onClose, onSent }: { id: string; onClose: () => v
   const over = run && ['finished', 'failed', 'stopped'].includes(run.status)
   const { data: review } = useJson<Review>(over ? `/api/runs/review?id=${encodeURIComponent(id)}` : null)
   const act = (path: string, body: object) => post(path, { id, ...body }).catch((e) => setError(e.message))
+  const remove = () => post('/api/runs/remove', { id }).then(onClose, (e) => setError(e.message))
   const send = (r: Run) => post('/api/orders/send', { repo: r.repo, branch: r.branch }).then(() => (setSent('Sent.'), onSent?.()), (e) => setSent(e.message))
 
-  if (gone) return <aside className="border-t border-rule p-5 lg:border-t-0 lg:border-l">This run is gone. Runs are forgotten when the server restarts, but its branch and folder are still there.</aside>
+  if (gone) return <aside className="border-t border-rule p-5 lg:border-t-0 lg:border-l">This run is no longer listed. Its branch is still there.</aside>
   if (!run) return <aside className="border-t border-rule p-5 text-ink-2 lg:border-t-0 lg:border-l">Connecting to the run</aside>
   return (
     <aside className="min-h-0 border-t border-rule p-5 lg:overflow-y-auto lg:border-t-0 lg:border-l" aria-label="Run">
@@ -196,6 +197,12 @@ export function RunPanel({ id, onClose, onSent }: { id: string; onClose: () => v
         <>
           <h3 className="mt-4 font-extrabold">Review</h3>
           <p className="text-sm text-ink-2">{review.commits.length === 1 ? '1 commit on the branch' : `${review.commits.length || 'No'} commits on the branch`}{review.uncommitted.length > 0 && `, ${review.uncommitted.length} files not committed`}. {run.order ? 'Send back pushes this branch to origin.' : "Merge or push it yourself once you're happy."}</p>
+          {review.merge && (
+            <p className={`mt-1 text-sm ${review.merge.conflicts.length ? 'font-semibold' : ''}`}>
+              {review.merge.conflicts.length ? `Conflicts with ${review.merge.into} in: ${review.merge.conflicts.join(', ')}. Merge it yourself and decide each one.` : `Merges cleanly into ${review.merge.into}.`}
+            </p>
+          )}
+          <button onClick={remove} className={`${button} mt-2`}>Remove folder</button>
           {run.order && (
             <div className="mt-2 flex items-center gap-2">
               <button onClick={() => send(run)} disabled={sent === 'Sent.'} className={primary}>Send back</button>

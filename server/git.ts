@@ -62,16 +62,19 @@ function parseLog(out: string): Commit[] {
   })
 }
 
-// shortcut: looks one folder deep, so nested repos need their parent folder added to the roots.
+// shortcut: looks two folders deep, so deeper repos need their parent folder added to the roots.
 export async function findRepos(roots: string[]) {
   const found: string[] = []
-  for (const root of roots) {
-    const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
-    for (const entry of entries) {
-      const path = join(root, entry.name)
-      if (entry.isDirectory() && existsSync(join(path, '.git'))) found.push(path)
+  const look = async (dir: string, depth: number) => {
+    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isDirectory()) continue
+      const path = join(dir, entry.name)
+      if (existsSync(join(path, '.git'))) found.push(path)
+      // Hidden folders and dependencies hold no projects, and <repo>.worktrees holds this app's run folders.
+      else if (depth > 1 && !entry.name.startsWith('.') && entry.name !== 'node_modules' && !entry.name.endsWith('.worktrees')) await look(path, depth - 1)
     }
   }
+  for (const root of roots) await look(root, 2)
   return found
 }
 
@@ -129,7 +132,7 @@ export async function catchup(folder: string, agent: string, from = seenRef(agen
   const repo = await git(folder, 'rev-parse', '--show-toplevel')
   const head = await rev(repo, 'HEAD')
   const name = basename(repo)
-  if (!head) return { agent, seen: '', head: '', news: false, commits: 0, files: 0, briefTokens: 0, projectTokens: 0, text: `${name} has no commits yet.` }
+  if (!head) return { agent, seen: '', head: '', news: false, commits: 0, files: 0, briefTokens: 0, projectTokens: 0, shas: [] as string[], text: `${name} has no commits yet.` }
 
   const blobs = await git(repo, 'ls-tree', '-r', '-l', 'HEAD')
   const readable = blobs.split('\n').filter((line) => !NOT_READ.test(line))
@@ -139,7 +142,7 @@ export async function catchup(folder: string, agent: string, from = seenRef(agen
   const base = seen && (await git(repo, 'merge-base', seen, head).catch(() => ''))
   if (!base) {
     const text = `# Catch-up for ${agent} in ${name}\n\nNo earlier visit on record. Read the project as usual, then run: omni seen --agent ${agent}\n`
-    return { agent, seen: '', head, news: false, commits: 0, files: 0, briefTokens: tokens(text.length), projectTokens, text }
+    return { agent, seen: '', head, news: false, commits: 0, files: 0, briefTokens: tokens(text.length), projectTokens, shas: [] as string[], text }
   }
 
   const commits = parseLog(await git(repo, 'log', `${base}..${head}`, `--format=${LOG_FORMAT}`))
@@ -175,7 +178,8 @@ export async function catchup(folder: string, agent: string, from = seenRef(agen
   const full = lines.join('\n')
   const text = full.length > MAX_CHARS ? `${full.slice(0, MAX_CHARS)}\n\nCut short. Run git log ${base.slice(0, 7)}..HEAD for the rest.\n` : full
 
-  return { agent, seen, head, news: commits.length > 0 || base !== seen, commits: commits.length, files: changedFiles.length, briefTokens: tokens(text.length), projectTokens, text }
+  // Every commit since the visit, not just the ones the text has room for, so the app can mark exactly those.
+  return { agent, seen, head, news: commits.length > 0 || base !== seen, commits: commits.length, files: changedFiles.length, briefTokens: tokens(text.length), projectTokens, shas: commits.map((c) => c.sha), text }
 }
 
 const KEEPS_HISTORY = ['resume', 'compact', 'fork']

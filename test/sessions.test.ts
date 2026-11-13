@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
-import { allSessions, claudeLimits, codexLimits, projectOf, sessionsIn } from '../server/sessions.ts'
+import { allSessions, claudeLimits, codexLimits, lastScan, projectOf, readClaude, readCodex, sessionsIn } from '../server/sessions.ts'
 
 const home = mkdtempSync(join(tmpdir(), 'omni-home-'))
 after(() => rmSync(home, { recursive: true, force: true }))
@@ -108,4 +108,42 @@ test('reads plan usage from the newest Codex log and the Claude widget file', as
   assert.deepEqual(await claudeLimits(plan), { at: '2026-11-05T14:16:49.296Z', windows: [{ used: 29, minutes: 300, resets: 300 }, { used: 50, minutes: 10080, resets: 0 }] })
   writeFileSync(file, '{"received_at":')
   assert.equal(await claudeLimits(plan), null)
+})
+
+test('a session knows whose turn it is', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omni-turn-'))
+  after(() => rmSync(dir, { recursive: true, force: true }))
+  const log = (name: string, rows: unknown[]) => (writeFileSync(join(dir, name), jsonl(rows)), join(dir, name))
+  const said = (stop_reason: string) => ({ type: 'assistant', sessionId: 'c', cwd: 'C:/Work', timestamp: '2026-11-05T10:00:00Z', message: { id: stop_reason, stop_reason, usage: {} } })
+  const user = (content: unknown) => ({ type: 'user', sessionId: 'c', cwd: 'C:/Work', timestamp: '2026-11-05T10:00:01Z', message: { role: 'user', content } })
+  const ended = log('ended.jsonl', [user('Hi'), said('tool_use'), user([{ type: 'tool_result', content: 'ok' }]), said('end_turn'), { type: 'last-prompt', sessionId: 'c' }])
+  const working = log('working.jsonl', [user('Hi'), said('tool_use'), user([{ type: 'tool_result', content: 'ok' }])])
+  const interrupted = log('interrupted.jsonl', [user('Hi'), said('tool_use'), user([{ type: 'text', text: '[Request interrupted by user]' }])])
+  assert.deepEqual((await Promise.all([ended, working, interrupted].map(readClaude))).map((s) => s.turnOver), [true, false, true])
+
+  const event = (type: string) => ({ type: 'event_msg', timestamp: '2026-11-05T10:00:00Z', payload: { type } })
+  const meta = { type: 'session_meta', timestamp: '2026-11-05T10:00:00Z', payload: { id: 'x', cwd: 'C:/Work' } }
+  const complete = log('complete.jsonl', [meta, event('task_started'), event('task_complete')])
+  const started = log('started.jsonl', [meta, event('task_complete'), event('task_started')])
+  assert.deepEqual((await Promise.all([complete, started].map((f) => readCodex(f)))).map((s) => s.turnOver), [true, false])
+})
+
+test('logs that give no session are counted', async () => {
+  const other = mkdtempSync(join(tmpdir(), 'omni-scan-'))
+  after(() => rmSync(other, { recursive: true, force: true }))
+  const dir = join(other, '.claude', 'projects', 'shop')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'good.jsonl'), jsonl([reply('m1', '2026-11-01T10:00:00Z')]))
+  writeFileSync(join(dir, 'new-format.jsonl'), jsonl([{ type: 'something-new' }]))
+  await allSessions(other)
+  assert.deepEqual(lastScan, { files: 2, unread: 1 })
+})
+
+test('Esc in Codex hands the turn back', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omni-abort-'))
+  after(() => rmSync(dir, { recursive: true, force: true }))
+  const file = join(dir, 'aborted.jsonl')
+  const event = (type: string) => ({ type: 'event_msg', timestamp: '2026-11-05T10:00:00Z', payload: { type } })
+  writeFileSync(file, jsonl([{ type: 'session_meta', timestamp: '2026-11-05T10:00:00Z', payload: { id: 'x', cwd: 'C:/Work' } }, event('task_started'), event('turn_aborted')]))
+  assert.equal((await readCodex(file)).turnOver, true)
 })

@@ -22,6 +22,8 @@ export type Session = {
   // The agent definition this run worked as, if any, and the session that started it, for a subagent.
   agent: string
   parent: string
+  // True when the log's last turn ended, or was interrupted, so the chat waits for you.
+  turnOver: boolean
   // The plan usage Codex logged most recently in this session.
   limits?: Limits
 }
@@ -58,8 +60,10 @@ function track(s: Session, time: string) {
   else if (time > span[1]) span[1] = time
 }
 
+const firstText = (content: unknown) => (typeof content === 'string' ? content : Array.isArray(content) ? (content.find((c) => c?.type === 'text')?.text ?? '') : '')
+
 export async function readClaude(file: string): Promise<Session> {
-  const s: Session = { tool: 'Claude Code', id: '', log: file, title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '' }
+  const s: Session = { tool: 'Claude Code', id: '', log: file, title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '', turnOver: false }
   const counted = new Set<string>()
   await eachLine(file, (e) => {
     s.id ||= e.sessionId ?? ''
@@ -70,6 +74,9 @@ export async function readClaude(file: string): Promise<Session> {
     if (e.gitBranch) s.branch = e.gitBranch
     if (e.type === 'custom-title' && e.customTitle) s.title = e.customTitle
     if (e.type === 'agent-name' && e.agentName) s.title ||= e.agentName
+    // Esc logs a user entry, so an interrupted chat waits for you too.
+    if (e.type === 'user') s.turnOver = String(firstText(e.message?.content)).startsWith('[Request interrupted')
+    if (e.type === 'assistant') s.turnOver = e.message?.stop_reason === 'end_turn'
     if (e.type !== 'assistant' || !e.message?.usage) return
     if (e.message.model && e.message.model !== '<synthetic>') s.model = e.message.model
     // One reply is logged once per content block, each carrying the same usage.
@@ -91,7 +98,7 @@ async function readClaudeSubagent(file: string): Promise<Session> {
 }
 
 export async function readCodex(file: string, titles: Map<string, string> = new Map()): Promise<Session> {
-  const s: Session = { tool: 'Codex', id: '', log: file, title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '' }
+  const s: Session = { tool: 'Codex', id: '', log: file, title: '', model: '', effort: '', cwd: '', branch: '', last: '', spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '', turnOver: false }
   await eachLine(file, (e) => {
     if (e.timestamp) track(s, e.timestamp)
     const p = e.payload
@@ -104,6 +111,8 @@ export async function readCodex(file: string, titles: Map<string, string> = new 
       if (sub) s.agent = sub.thread_spawn ? (sub.thread_spawn.agent_role ?? 'default') : String(sub.other ?? 'subagent')
       s.parent = p.parent_thread_id ?? sub?.thread_spawn?.parent_thread_id ?? ''
     }
+    // Esc logs turn_aborted, which hands the turn back too.
+    if (e.type === 'event_msg' && ['task_started', 'task_complete', 'turn_aborted'].includes(p?.type)) s.turnOver = p.type !== 'task_started'
     if (e.type === 'turn_context') {
       if (p.model) s.model = p.model
       if (p.effort) s.effort = p.effort
@@ -139,6 +148,9 @@ async function codexTitles(home: string) {
   return titles
 }
 
+// What the last scan found: log files, and how many gave no session, which may mean a tool changed its log format.
+export let lastScan = { files: 0, unread: 0 }
+
 // Logs reach megabytes, so a file is only parsed again once it has changed.
 const cache = new Map<string, { stamp: string; session: Session }>()
 
@@ -159,7 +171,9 @@ export async function allSessions(home = homedir()) {
     ...claude.map((f) => read(f, basename(dirname(f)) === 'subagents' ? readClaudeSubagent : readClaude)),
     ...codex.map((f) => read(f, (x) => readCodex(x, titles))),
   ])
-  return results.flatMap((r) => (r.status === 'fulfilled' && r.value.cwd ? [r.value] : [])).sort((a, b) => b.last.localeCompare(a.last))
+  const sessions = results.flatMap((r) => (r.status === 'fulfilled' && r.value.cwd ? [r.value] : []))
+  lastScan = { files: results.length, unread: results.length - sessions.length }
+  return sessions.sort((a, b) => b.last.localeCompare(a.last))
 }
 
 // The newest Codex reading in any log.

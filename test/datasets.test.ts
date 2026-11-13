@@ -7,7 +7,7 @@ import { activityByHour, commitsByWeek, tokensByDay } from '../src/datasets.ts'
 // Tuesday 3 November 2026, local time.
 const at = (day: number, h: number, m = 0) => new Date(2026, 10, day, h, m).toISOString()
 const session = (over: Partial<Session>): Session => ({
-  tool: 'Claude Code', id: 'a', log: 'a.jsonl', title: '', model: '', effort: '', cwd: '', branch: '', last: at(3, 12), spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '', ...over,
+  tool: 'Claude Code', id: 'a', log: 'a.jsonl', title: '', model: '', effort: '', cwd: '', branch: '', last: at(3, 12), spans: [], tokens: { input: 0, cached: 0, output: 0 }, agent: '', parent: '', turnOver: false, ...over,
 })
 const commit = (date: string, agent: string): Commit => ({ sha: date, parents: [], author: 'Felix', date, subject: '', refs: [], agent, why: '' })
 

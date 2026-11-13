@@ -37,6 +37,7 @@ export function NeedsYou({ orders, onSelect }: { orders: ReturnType<typeof useOr
   if (!data?.orders.length && !data?.errors.length && !error) return null
 
   const send = (o: Order) => post('/api/orders/send', { repo: o.repo, branch: o.branch }).then(() => (setProblem(''), check()), (e) => setProblem(e.message))
+  const dismiss = (o: Order) => post('/api/orders/dismiss', { repo: o.repo, branch: o.branch, sha: o.sha }).then(() => (setProblem(''), check()), (e) => setProblem(e.message))
   const checkNow = async () => {
     setBusy(true)
     await check(true)
@@ -54,6 +55,7 @@ export function NeedsYou({ orders, onSelect }: { orders: ReturnType<typeof useOr
               <span className="min-w-0">
                 <b className="block truncate font-extrabold">{o.title}</b>
                 <span className="block text-ink-2">{o.project} · from {o.author} · {ago(o.date)}{o.ask && ` · question about ${o.ask}`}</span>
+                <span className="block text-sm text-ink-2">{o.signed}{o.model && `. Asks for ${o.model}`}</span>
                 {o.note && <span className="block text-sm break-words text-ink-2">{o.note}</span>}
               </span>
             </div>
@@ -67,6 +69,8 @@ export function NeedsYou({ orders, onSelect }: { orders: ReturnType<typeof useOr
               {o.state === 'open' && <button onClick={() => setOrder(o)} className={primary}>Run</button>}
               {o.state === 'ready' && <button onClick={() => send(o)} className={primary}>Send back</button>}
               {o.run && <button onClick={() => onSelect(o.run!)} className={button}>Show the run</button>}
+              {/* A ready order holds a report to send back, so it can't be hidden. */}
+              {['open', 'blocked', 'diverged'].includes(o.state) && <button onClick={() => dismiss(o)} className={button}>Dismiss</button>}
             </div>
           </li>
         ))}

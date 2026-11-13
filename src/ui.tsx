@@ -34,6 +34,10 @@ export function ago(date: string) {
 export const clock = (date: Date | string) => new Date(date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 export const count = (n: number) => n.toLocaleString('en')
 export const isLive = (s: Session) => Date.now() - Date.parse(s.last) < 10 * 60 * 1000
+// Green while the agent has the turn, amber once it has handed it back. Both go dark after 10 quiet minutes.
+export const sessionLamp = (s: Session): keyof typeof LAMPS => (!isLive(s) ? 'off' : s.turnOver ? 'wait' : 'run')
+export const busiest = (sessions: Session[]) => (['run', 'wait'] as const).find((l) => sessions.some((s) => sessionLamp(s) === l)) ?? 'off'
+export const LAMP_LABEL = { run: 'Working', wait: 'Waiting for you', off: undefined }
 export const sessionName = (s: Session) => s.title || `Session ${s.id.slice(0, 8)}`
 export const modelName = (s: Pick<Session, 'model' | 'effort'>) => (s.effort ? `${s.model}, ${s.effort}` : s.model)
 
@@ -68,6 +72,9 @@ export function applyTheme(theme: Theme, save = false) {
   document.documentElement.dataset.theme = theme
   if (save) try { localStorage.setItem(THEME_KEY, theme) } catch {}
 }
+
+// An outline in the page colour, so a label stays readable where a line crosses it.
+export const HALO = { stroke: 'var(--color-sheet)', strokeWidth: 4, paintOrder: 'stroke', strokeLinejoin: 'round' } as const
 
 export const button ='rounded-sm border-[1.5px] border-ink px-3 py-1 text-sm font-semibold disabled:opacity-50'
 export const primary = `${button} bg-ink text-sheet`
